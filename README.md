@@ -6,10 +6,13 @@ If you haven't installed Streamlit:
 
 	pip install streamlit
 	
-Or    
+Or:
 
 	python3 -m pip install streamlit
 
+If you haven't installed yaml:
+
+	python3 -m pip install pyyaml
 
 If Streamlit is installed, open your terminal or command prompt and navigate to the directory containing app.py
 
