@@ -3,9 +3,9 @@ Streamlit webapp for epiworld
 
 
 #If you haven't installed Streamlit:
-  pip install streamlit
+pip install streamlit
 
-#If Streamlit is installed, open your terminal or command prompt
-  Navigate to the directory containing app.py
-  Run Streamlit with:
-      streamlit run app.py
+#If Streamlit is installed, open your terminal or command prompt and navigate to the directory containing app.py
+
+#To run Streamlit with:
+streamlit run app.py
