@@ -19,3 +19,12 @@ If Streamlit is installed, open your terminal or command prompt and navigate to 
 To run Streamlit with app:
 
 	streamlit run app.py
+
+
+## Launch the App online
+
+Click below to open the live Streamlit application:
+
+https://epiworldpythonapp.streamlit.app/
+
+*(If the app is still deploying, it may take a few seconds to load.)*
