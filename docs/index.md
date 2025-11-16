@@ -1,9 +1,9 @@
 # epiworldPythonStreamlit
 
-Streamlit web app for epiworld.
+## Launch the App
 
-## How to run locally
+Click below to open the live Streamlit application:
 
-```bash
-pip install streamlit
-streamlit run app.py
+https://epiworldpythonapp.streamlit.app/
+
+*(If the app is still deploying, it may take a few seconds to load.)*
