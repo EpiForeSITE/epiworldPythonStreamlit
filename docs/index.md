@@ -7,8 +7,3 @@ Streamlit web app for epiworld.
 ```bash
 pip install streamlit
 streamlit run app.py
-
-
-(GitHub will auto-render this as Markdown.)
-
-
