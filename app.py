@@ -3,23 +3,33 @@ import yaml
 import streamlit as st
 import streamlit.components.v1 as components
 
-from utils.model_loader import load_model
+from utils.model_loader import discover_models, load_model_from_file
+from utils.parameter_loader import load_model_defaults   # <-- NEW
 
-
-#Load YAML
+# Load yaml
 base_dir = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(base_dir, "config.yaml")) as f:
-    config = yaml.safe_load(f)
 
-#App title & description
-st.title(config["app"]["title"])
-st.write(config["app"]["description"])
+# Load app title/description
+with open(os.path.join(base_dir, "config/app.yaml")) as f:
+    app_config = yaml.safe_load(f)
 
-#Custom CSS for better sidebar clarity
-#NEED ADJUSTMENT
+# Load model paths
+with open(os.path.join(base_dir, "config/paths.yaml")) as f:
+    path_config = yaml.safe_load(f)
+
+# Load global defaults
+with open(os.path.join(base_dir, "config/global_defaults.yaml")) as f:
+    global_defaults = yaml.safe_load(f)
+
+
+# App title & description
+st.title(app_config["title"])
+st.write(app_config["description"])
+
+
+# CSS (sidebar headings)
 st.markdown("""
     <style>
-    /* Sidebar parameter section headings */
     .sidebar-subtitle {
         background-color: #2a2a2a;
         color: #ffffff;
@@ -31,8 +41,6 @@ st.markdown("""
         font-weight: 600;
         font-size: 0.95rem;
     }
-
-    /* Slight indentation for nested items */
     .sidebar-indent {
         margin-left: 15px;
     }
@@ -40,63 +48,73 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-#Sidebar
+# Sidebar main header
 st.sidebar.header("Simulation Controls")
 
-#Model selection
-model_map = {m["name"]: m["id"] for m in config["simulation_models"]}
-selected_model_name = st.sidebar.selectbox("Select Model", list(model_map.keys()))
-model_id = model_map[selected_model_name]
+# MODEL SELECTION
 
-#Sidebar parameters
-# st.sidebar.subheader("Model Parameters")
-# params = {}
-# for key, val in config["default_parameters"].items():
-#     if isinstance(val, (float, int)):
-#         params[key] = st.sidebar.number_input(key, value=val)
-#     else:
-#         params[key] = st.sidebar.text_input(key, value=str(val))
+default_path = os.path.join(base_dir, path_config["model_paths"]["default_path"])
+custom_path = os.path.join(base_dir, path_config["model_paths"]["custom_path"])
 
-#Sidebar parameters with indentation and subtitles
+user_custom_path = st.sidebar.text_input("Custom Models Folder", value=custom_path)
+
+default_models = discover_models(default_path)
+custom_models = discover_models(user_custom_path)
+
+model_options = {f"Default: {name}": file for name, file in default_models.items()}
+model_options.update({f"Custom: {name}": file for name, file in custom_models.items()})
+
+if not model_options:
+    st.sidebar.warning("No model files found in models/ or custom_models/")
+    st.stop()
+
+selected_label = st.sidebar.selectbox("Select Model", list(model_options.keys()))
+selected_model_file = model_options[selected_label]
+
+# SIDEBAR — PARAMETERS (Collapsible Sections)
 st.sidebar.subheader("Input Parameters")
+
 params = {}
 
-def render_parameters(param_dict, level=0):
-    """Recursively render parameters with styled subtitles and indentation."""
+def render_parameters(param_dict):
+    """
+    Rules:
+    - If a key's value is a dict → render as collapsible section
+    - If not → render as a normal parameter (not collapsible)
+    """
     for key, val in param_dict.items():
+
+        # Collapsible section (only for dicts)
         if isinstance(val, dict):
-            # Render section subtitle with custom CSS
-            st.sidebar.markdown(
-                f"<div class='sidebar-subtitle'>{key}</div>",
-                unsafe_allow_html=True
-            )
-            render_parameters(val, level + 1)
-        else:
-            # Render input field with indentation
-            container = st.sidebar.container()
-            if level > 0:
-                with container:
-                    st.markdown("<div class='sidebar-indent'>", unsafe_allow_html=True)
-                    if isinstance(val, (float, int)):
-                        params[key] = st.number_input(key, value=val)
+            with st.sidebar.expander(key, expanded=False):
+                for subkey, subval in val.items():
+                    if isinstance(subval, (float, int)):
+                        params[subkey] = st.number_input(subkey, value=subval)
                     else:
-                        params[key] = st.text_input(key, value=str(val))
-                    st.markdown("</div>", unsafe_allow_html=True)
+                        params[subkey] = st.text_input(subkey, value=str(subval))
+
+        # Normal parameter (not collapsible)
+        else:
+            if isinstance(val, (float, int)):
+                params[key] = st.sidebar.number_input(key, value=val)
             else:
-                if isinstance(val, (float, int)):
-                    params[key] = st.sidebar.number_input(key, value=val)
-                else:
-                    params[key] = st.sidebar.text_input(key, value=str(val))
-
-# Render nested YAML structure
-render_parameters(config["default_parameters"])
+                params[key] = st.sidebar.text_input(key, value=str(val))
 
 
-#Run simulation
+# Load default parameters for selected model
+model_defaults = load_model_defaults(selected_model_file)
+
+if model_defaults:
+    render_parameters(model_defaults)
+else:
+    st.sidebar.info("No default parameters for this model.")
+
+# RUN SIMULATION BUTTON
+
 if st.sidebar.button("Run Simulation"):
-    with st.spinner(f"Running {selected_model_name} model..."):
-        run_model_func = load_model(model_id)
-        html_table = run_model_func(params)
-        st.subheader("Simulation Outcome")
-        components.html(html_table, height=600, scrolling=True)
+    with st.spinner(f"Running model: {selected_label}..."):
+        run_model_func = load_model_from_file(selected_model_file)
+        html_output = run_model_func(params)
 
+        st.subheader("Simulation Outcome")
+        components.html(html_output, height=600, scrolling=True)
