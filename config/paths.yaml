@@ -1,0 +1,3 @@
+model_paths:
+  default_path: "models"
+  custom_path: "custom_models"
