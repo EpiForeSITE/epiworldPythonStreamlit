@@ -1,11 +1,12 @@
 from decimal import Decimal, ROUND_HALF_EVEN, getcontext
 
+
 def run_model(params: dict) -> str:
     """
     TB Isolation simulation
     """
 
-    #Decimal setup
+    # Decimal setup
     getcontext().prec = 28
     ONE = Decimal("1")
     CENT = Decimal("0.01")
@@ -18,7 +19,7 @@ def run_model(params: dict) -> str:
         """Quantize numbers (counts/probabilities) to 2 dp."""
         return x.quantize(TWO_DP, rounding=ROUND_HALF_EVEN)
 
-    #helper method to tolerate label variants from YAML, returning Decimal
+    # helper method to tolerate label variants from YAML, returning Decimal
     def getp(default, *names) -> Decimal:
         for n in names:
             if n in params and params[n] != "":
@@ -28,7 +29,7 @@ def run_model(params: dict) -> str:
                     pass
         return Decimal(str(default))
 
-    #Extract parameters
+    # Extract parameters
     contacts_per_case = getp(0, "Number of contacts for each released TB case")
     prob_latent_if_14day = getp(0, "Probability that contact develops latent TB if 14-day isolation")
     infectiousness_multiplier = getp(1.0, "Multiplier for infectiousness with 5-day vs. 14-day isolation")
@@ -44,15 +45,16 @@ def run_model(params: dict) -> str:
 
     cost_latent = getp(0, "Cost of latent TB infection (cost_latent)", "Cost of latent TB infection")
     cost_active = getp(0, "Cost of active TB infection (cost_active)", "Cost of active TB infection")
-    isolation_cost = getp(0, "Daily isolation cost (isolation_cost)", "Isolation cost", "Direct medical cost of a day of isolation")
+    isolation_cost = getp(0, "Daily isolation cost (isolation_cost)", "Isolation cost",
+                          "Direct medical cost of a day of isolation")
     hourly_wage_worker = getp(0, "Hourly wage of worker (hourly_wage_worker)", "Hourly wage for worker")
 
     discount_rate = getp(0.0, "Discount rate", "discount_rate")
     remaining_years = int(getp(40, "Remaining years", "Remaining years of life", "remaining_years"))
 
-    #Core counts
+    # Core counts
     latent_14_day = q2n(contacts_per_case * prob_latent_if_14day)
-    latent_5_day  = q2n(latent_14_day * infectiousness_multiplier)
+    latent_5_day = q2n(latent_14_day * infectiousness_multiplier)
 
     active_14_day = q2n(
         latent_14_day * prob_latent_to_active_2yr
@@ -63,16 +65,16 @@ def run_model(params: dict) -> str:
         + latent_5_day * (ONE - prob_latent_to_active_2yr) * prob_latent_to_active_lifetime
     )
 
-    #Costs
+    # Costs
     direct_cost_14_day = q2(isolation_cost * Decimal(14))
-    direct_cost_5_day  = q2(isolation_cost * Decimal(5))
+    direct_cost_5_day = q2(isolation_cost * Decimal(5))
 
     productivity_loss_14_day = q2(Decimal(14) * workday_ratio * hourly_wage_worker * Decimal(8))
-    productivity_loss_5_day  = q2(Decimal(5)  * workday_ratio * hourly_wage_worker * Decimal(8))
+    productivity_loss_5_day = q2(Decimal(5) * workday_ratio * hourly_wage_worker * Decimal(8))
 
     base = ONE + discount_rate
     discounted_2yr = (prob_latent_to_active_2yr / Decimal(2)) / (base ** 1) \
-                   + (prob_latent_to_active_2yr / Decimal(2)) / (base ** 2)
+                     + (prob_latent_to_active_2yr / Decimal(2)) / (base ** 2)
     discounted_lifetime = sum(
         (prob_latent_to_active_lifetime / Decimal(remaining_years)) / (base ** y)
         for y in range(3, remaining_years + 1)
@@ -85,13 +87,12 @@ def run_model(params: dict) -> str:
 
     # totals
     secondary_cost_14_day = q2(latent_14_day * secondary_infection_cost_per_latent)
-    secondary_cost_5_day  = q2(latent_5_day  * secondary_infection_cost_per_latent)
+    secondary_cost_5_day = q2(latent_5_day * secondary_infection_cost_per_latent)
 
     total_14_day = q2(direct_cost_14_day + productivity_loss_14_day + secondary_cost_14_day)
-    total_5_day  = q2(direct_cost_5_day  + productivity_loss_5_day  + secondary_cost_5_day)
+    total_5_day = q2(direct_cost_5_day + productivity_loss_5_day + secondary_cost_5_day)
 
-
-    #Waiting params
+    # Waiting params
     direct_med_cost = getp(0, "Direct medical cost of a day of isolation")
     cost_motel_room = getp(0, "Cost of motel room per day")
     hourly_wage_nurse = getp(0, "Hourly wage for nurse")
@@ -99,7 +100,7 @@ def run_model(params: dict) -> str:
     hourly_wage_health_worker = getp(0, "Hourly wage for public health worker")
     isolation_type = getp(0, "Isolation type (1=hospital,2=motel,3=home)")
 
-    #HTML table
+    # HTML table
     def fm(x: Decimal) -> str:
         return f"{x:,.2f}"
 
