@@ -1,0 +1,17 @@
+/* Sidebar section headers */
+.sidebar-subtitle {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    padding: 6px 10px;
+    margin-top: 10px;
+    margin-bottom: 5px;
+    border-left: 4px solid #00c0ff;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+/* Indented text in sidebar */
+.sidebar-indent {
+    margin-left: 15px;
+}
