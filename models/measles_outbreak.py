@@ -44,7 +44,7 @@ def run_model(params):
     vacc_rate    = getp(0, "Vaccination rate in community")
     quarantine   = int(getp(21, "Length of quarantine (days)"))
 
-    # CORE CALCULATIONS
+    # Core Calculations
 
     # Hospitalizations
     hosp_22  = q2(22  * prop_hosp * cost_hosp)
@@ -99,7 +99,7 @@ def run_model(params):
         "df_costs": df_costs
     }
 
-#  BUILD SECTIONS (UI structure)
+#  UI
 def build_sections(results):
 
     df_costs = results["df_costs"]
