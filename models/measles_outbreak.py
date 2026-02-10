@@ -8,13 +8,33 @@ Measles outbreak simulation
 model_title = "Measles Outbreak Cost Estimation"
 model_description = "Estimates hospitalization, tracing, and productivity costs for measles outbreaks."
 
-def run_model(params):
+SCENARIO_LABELS = {
+    "22_cases": "22 Cases",
+    "100_cases": "100 Cases",
+    "803_cases": "803 Cases"
+}
 
-    # Decimal precision
+
+def run_model(params, label_overrides: dict = None):
     getcontext().prec = 28
+    ONE = Decimal("1")
     CENT = Decimal("0.01")
 
+    if label_overrides is None:
+        label_overrides = {}
+
+    lbl_22 = label_overrides.get("22_cases", SCENARIO_LABELS["22_cases"])
+    lbl_100 = label_overrides.get("100_cases", SCENARIO_LABELS["100_cases"])
+    lbl_803 = label_overrides.get("803_cases", SCENARIO_LABELS["803_cases"])
+
     def q2(x: Decimal) -> Decimal:
+        """
+        Conditional rounding:
+        - If absolute value > 10, round to whole number (0 decimal places).
+        - Otherwise, round to 2 decimal places.
+        """
+        if abs(x) > 10:
+            return x.quantize(ONE, rounding=ROUND_HALF_EVEN)
         return x.quantize(CENT, rounding=ROUND_HALF_EVEN)
 
     def getp(default, *names):
@@ -30,28 +50,28 @@ def run_model(params):
                     pass
         return Decimal(str(default))
 
-    # EXTRACT PARAMETERS
-    cost_hosp    = getp(0, "Cost of measles hospitalization")
-    prop_hosp    = getp(0, "Proportion of cases hospitalized")
+    # extract parameters
+    cost_hosp = getp(0, "Cost of measles hospitalization")
+    prop_hosp = getp(0, "Proportion of cases hospitalized")
 
     missed_ratio = getp(1.0, "Proportion of quarantine days that would be a missed day of work")
-    wage_worker  = getp(0, "Hourly wage of worker (hourly_wage_worker)", "Hourly wage for worker")
+    wage_worker = getp(0, "Hourly wage of worker (hourly_wage_worker)", "Hourly wage for worker")
 
-    wage_tracer  = getp(0, "Hourly wage for contract tracer")
-    hrs_tracing  = getp(0, "Hours of contact tracing per contact")
+    wage_tracer = getp(0, "Hourly wage for contract tracer")
+    hrs_tracing = getp(0, "Hours of contact tracing per contact")
 
-    contacts     = getp(0, "Number of contacts per case")
-    vacc_rate    = getp(0, "Vaccination rate in community")
-    quarantine   = int(getp(21, "Length of quarantine (days)"))
+    contacts = getp(0, "Number of contacts per case")
+    vacc_rate = getp(0, "Vaccination rate in community")
+    quarantine = int(getp(21, "Length of quarantine (days)"))
 
-    # Core Calculations
+    # core calculations
 
-    # Hospitalizations
-    hosp_22  = q2(22  * prop_hosp * cost_hosp)
+    # hospitalizations
+    hosp_22 = q2(22 * prop_hosp * cost_hosp)
     hosp_100 = q2(100 * prop_hosp * cost_hosp)
     hosp_803 = q2(803 * prop_hosp * cost_hosp)
 
-    # Lost productivity
+    # lost productivity
     lost_22 = q2(
         22 * contacts * (1 - vacc_rate) * quarantine *
         missed_ratio * wage_worker
@@ -65,18 +85,17 @@ def run_model(params):
         missed_ratio * wage_worker
     )
 
-    # Contact tracing cost
-    trace_22 = q2(22  * contacts * hrs_tracing * wage_tracer)
+    # contact tracing cost
+    trace_22 = q2(22 * contacts * hrs_tracing * wage_tracer)
     trace_100 = q2(100 * contacts * hrs_tracing * wage_tracer)
     trace_803 = q2(803 * contacts * hrs_tracing * wage_tracer)
 
-    # Totals
-    total_22  = q2(hosp_22 + lost_22 + trace_22)
+    # totals
+    total_22 = q2(hosp_22 + lost_22 + trace_22)
     total_100 = q2(hosp_100 + lost_100 + trace_100)
     total_803 = q2(hosp_803 + lost_803 + trace_803)
 
-    # DATAFRAME
-
+    # dataframe
     df_costs = pd.DataFrame({
         "Cost Type": [
             "Hospitalization",
@@ -84,13 +103,13 @@ def run_model(params):
             "Contact tracing",
             "TOTAL"
         ],
-        "22 Cases":  [
+        lbl_22: [
             hosp_22, lost_22, trace_22, total_22
         ],
-        "100 Cases": [
+        lbl_100: [
             hosp_100, lost_100, trace_100, total_100
         ],
-        "803 Cases": [
+        lbl_803: [
             hosp_803, lost_803, trace_803, total_803
         ]
     })
@@ -99,9 +118,9 @@ def run_model(params):
         "df_costs": df_costs
     }
 
-#  UI
-def build_sections(results):
 
+# ui
+def build_sections(results):
     df_costs = results["df_costs"]
 
     sections = [
