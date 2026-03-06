@@ -118,6 +118,61 @@ And a pretty figure
 {{ figure:fig1 }}
 ```
 
+## Task dependency diagram
+
+The diagram below shows how the infrastructure tasks and function-level tasks relate to each other. Infrastructure tasks (top block) must be finalized before implementation work can proceed; solid arrows indicate data/output dependencies and dashed arrows indicate that a function triggers another in the normal app flow.
+
+```mermaid
+flowchart TD
+    subgraph INFRA["🏗️ Infrastructure — finalize first"]
+        direction LR
+        BP["Branch protection rules"]
+        AG["AGENTS.md"]
+        DC["Devcontainer"]
+        GH_CI["GitHub Actions: CI testing (uv)"]
+        GH_AG["GitHub Actions: agent environment"]
+        DC --> GH_CI
+        DC --> GH_AG
+    end
+
+    subgraph FUNC["💻 Function implementation"]
+        STLITE["Setup stlite framework"]
+        VY["validate_yaml()"]
+        BM["build_menu()"]
+        WP["watch_parameters()"]
+        RM["run_model()"]
+        GR["generate_report()"]
+        PDF["save_as_pdf()"]
+        SMS["store_model_state()"]
+        SCM["save_current_model()"]
+
+        STLITE --> VY
+        VY --> BM
+        BM -.->|"user values"| WP
+        VY -->|"model_dict"| WP
+        WP --> RM
+        RM --> GR
+        GR --> PDF
+        WP --> SMS
+        WP --> SCM
+    end
+
+    INFRA ==> FUNC
+```
+
+## Function summary
+
+| Function | Input → Output |
+|---|---|
+| `validate_yaml(yaml_content: str)` | raw YAML string → validated `dict` |
+| `build_menu(model_dict: dict)` | model dict → Streamlit widgets (side-effects) |
+| `watch_parameters(model_dict, current_values)` | model dict + user values → validated dict + warnings |
+| `run_model(model_dict, parameters)` | model dict + params → `list[dict]` (per-scenario results) |
+| `generate_report(model_dict, results)` | model dict + results → HTML string |
+| `save_as_pdf(html_content: str)` | HTML string → PDF bytes |
+| `store_model_state(model_dict, parameters)` | model + params → persisted state (side-effects) |
+| `save_current_model(model_dict, current_parameters)` | model + params → YAML string on disk |
+
 ## Tasks
 
 ### `validate_yaml(yaml_content: str) -> dict`
