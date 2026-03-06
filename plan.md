@@ -1,5 +1,9 @@
 # Development plan
 
+Based on the meeting of March 5th + the discussion on GitHub ([link](https://github.com/EpiForeSITE/epiworldPythonStreamlit/discussions/2)), here is a list of tasks/things that need to be built for the project.
+
+## Example of yaml doc
+
 From Olivia's comments:
 
 ```yaml
