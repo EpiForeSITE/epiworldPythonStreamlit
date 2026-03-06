@@ -125,7 +125,7 @@ And a pretty figure
 - **Input:** Raw YAML document as a string (e.g., file contents read from disk or uploaded by the user).
 - **Output:** A validated Python dictionary representing the model, or raises a descriptive error on failure.
 - **Steps:**
-    1. Parse the YAML string into a dictionary. If not, then just check the dictionary. See the [SO reference on YAML validation in Python](https://stackoverflow.com/questions/3262569/validating-a-yaml-document-in-python/22231372#22231372) for schema-based approaches.
+    1. Parse the YAML string into a dictionary and validate its structure against the expected schema (required keys, value types, etc.). See the [SO reference on YAML validation in Python](https://stackoverflow.com/questions/3262569/validating-a-yaml-document-in-python/22231372#22231372) for schema-based approaches; if a full schema validator is too heavy, at minimum walk the parsed dictionary and check each required field manually.
     2. Ensure that any embedded Python code (e.g., figure snippets) is not malicious. Use the [CPython AST module](https://docs.python.org/3/library/ast.html) (`ast.walk`) to inspect the parse tree, whitelist allowed node types/names, and reject anything outside that set.
     3. Check equations for recursive references and determine a safe execution order (topological sort).
     4. Validate units for consistency (e.g., ensure monetary values are not mixed with proportions without explicit conversion).
