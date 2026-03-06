@@ -7,88 +7,84 @@ Based on the meeting of March 5th + the discussion on GitHub ([link](https://git
 From Olivia's comments:
 
 ```yaml
-export default defineModel({
-  metadata: {
-    title: "Measles Outbreak Cost Calculator",
-    description: "Estimates the economic cost of a measles outbreak across three outbreak-size scenarios.",
-    authors: [
-      { name: "Jane Doe", email: "jane@example.org" },
-      { name: "John Smith" }
-    ],
-    introduction: `
-## Background
-Measles is a highly contagious viral disease ...
+model:
+  metadata:
+    title: "Measles Outbreak Cost Calculator"
+    description: "Estimates the economic cost of a measles outbreak across three outbreak-size scenarios."
+    authors:
+      - name: "Jane Doe"
+        email: "jane@example.org"
+      - name: "John Smith"
+    introduction: |
+      ## Background
+      Measles is a highly contagious viral disease ...
 
-## Assumptions
-All wage figures are in 2024 USD and are taken
-from the Bureau of Labor Statistics.
-`
-  },
+      ## Assumptions
+      All wage figures are in 2024 USD and are taken
+      from the Bureau of Labor Statistics.
 
-  parameters: {
-    cost_hosp: integer({
-      label: "Cost of measles hospitalization",
-      description: "Average direct medical cost per hospitalised measles case (USD).",
-      default: 31168,
-      min: 0,
-      max: 500000,
-      unit: "USD",
-      references: [
-        "Ortega-Sanchez et al. (2014). Vaccine, 32(34)."
-      ]
-    }),
+  parameters:
+    cost_hosp:
+      type: integer
+      label: "Cost of measles hospitalization"
+      description: "Average direct medical cost per hospitalised measles case (USD)."
+      default: 31168
+      min: 0
+      max: 500000
+      unit: "USD"
+      references:
+        - "Ortega-Sanchez et al. (2014). Vaccine, 32(34)."
 
-    prop_hosp: number({
-      label: "Proportion of cases hospitalised",
-      description: "Fraction of confirmed cases requiring hospital admission.",
-      default: 0.20,
-      min: 0,
-      max: 1,
-      unit: "proportion",
-      references: [
-        "CDC Measles surveillance data 2019."
-      ]
-    }),
+    prop_hosp:
+      type: number
+      label: "Proportion of cases hospitalised"
+      description: "Fraction of confirmed cases requiring hospital admission."
+      default: 0.20
+      min: 0
+      max: 1
+      unit: "proportion"
+      references:
+        - "CDC Measles surveillance data 2019."
 
-    /* ... */
+  equations:
+    eq_hosp:
+      label: "Hospitalisation cost"
+      unit: "USD"
+      output: "integer"
+      compute: "n_cases * prop_hosp * cost_hosp"
 
-  equations: {
-    eq_hosp: equation({
-      label: "Hospitalisation cost",
-      unit: "USD",
-      output: "integer",
-      compute: ({ n_cases, prop_hosp, cost_hosp }) =>
-          n_cases * prop_hosp * cost_hosp
-    }),
+  table:
+    scenarios:
+      - id: "s_22"
+        label: "22 Cases"
+        vars:
+          n_cases: 22
+      - id: "s_100"
+        label: "100 Cases"
+        vars:
+          n_cases: 100
+      - id: "s_803"
+        label: "803 Cases"
+        vars:
+          n_cases: 803
 
-    /* ... */
-  },
+    rows:
+      - label: "Hospitalisation cost"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing cost"
+        value: "eq_tracing"
+      - label: "TOTAL"
+        value: "eq_total"
+        emphasis: "strong"
 
-  table: table({
-    scenarios: [
-      { id: "s_22", label: "22 Cases", vars: { n_cases: 22 } },
-      { id: "s_100", label: "100 Cases", vars: { n_cases: 100 } },
-      { id: "s_803", label: "803 Cases", vars: { n_cases: 803 } }
-    ],
-
-    rows: [
-      { label: "Hospitalisation cost", value: "eq_hosp" },
-      { label: "Lost productivity", value: "eq_lost_prod" },
-      { label: "Contact tracing cost", value: "eq_tracing" },
-      { label: "TOTAL", value: "eq_total", emphasis: "strong" }
-    ]
-  }),
-
-  ## Extras
-  figures: figure({
-    title: "My figure",
-    alt-text: "Some text",
-    py-code: "
-    import matplotlib as mp
-    mp.plot(...)
-    "
-  })
-});
+  figures:
+    - title: "My figure"
+      alt-text: "Some text"
+      py-code: |
+        import matplotlib as mp
+        mp.plot(...)
 ```
 
 ## Tasks 
