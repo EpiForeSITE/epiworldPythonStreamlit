@@ -25,6 +25,10 @@ RUN apt-get update && \
 # Install Python
 RUN uv python install ${PYTHON_VERSION}
 
+# Copy requirements and install Python dependencies
+COPY ./requirements.txt /tmp/requirements.txt
+RUN uv pip install --python ${PYTHON_VERSION} --system -r /tmp/requirements.txt
+
 # Create a non-root user
 RUN useradd -m -s $(which bash) $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/90-nopasswd \
