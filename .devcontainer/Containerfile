@@ -1,0 +1,35 @@
+FROM ubuntu:24.04
+
+# Build arguments
+ARG PYTHON_VERSION=3.12
+ARG USERNAME=dev
+
+# Environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y \
+        git \
+        curl \
+        sudo \
+        build-essential \
+        pkg-config && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python
+RUN uv python install ${PYTHON_VERSION}
+
+# Create a non-root user
+RUN useradd -m -s $(which bash) $USERNAME \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/90-nopasswd \
+    && chmod 0440 /etc/sudoers.d/90-nopasswd
+
+# Final setup
+USER $USERNAME
+WORKDIR /workspaces/epiworldPythonStreamlit
