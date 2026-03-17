@@ -1,30 +1,36 @@
 # epiworldPythonStreamlit
-Streamlit webapp for epiworld
 
+Streamlit webapp for epiworld.
 
-If you haven't installed Streamlit:
+Please install dependencies with a dependency manager capable of reading `pyproject.toml` files
+(most modern solutions will work). For example:
 
-	pip install streamlit
-	
-Or:
+```
+# with uv
+uv sync
 
-	python3 -m pip install streamlit
+# with pip
+pip install -e .
+```
 
-If you haven't installed yaml:
+Please note that this step is not required if working in a containerized context.
 
-	python3 -m pip install pyyaml
+You may then run with:
 
-If Streamlit is installed, open your terminal or command prompt and navigate to the directory containing app.py
+```
+# uv
+uv run -m streamlit run app.py
 
-To run Streamlit with app:
-
-	streamlit run app.py
-
+# pip
+streamlit run app.py
+```
 
 ## Launch the App online
 
-Click below to open the live Streamlit application:
+Click below to open the live Streamlit application, as currently deployed:
 
 https://epiworldpythonapp.streamlit.app/
 
 *(If the app is still deploying, it may take a few seconds to load.)*
+
+Please follow instructions in your console for loading development versions.

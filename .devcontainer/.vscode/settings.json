@@ -1,5 +1,6 @@
 {
     "python.defaultInterpreterPath": "/opt/venv/bin/python",
+    "ruff.importStrategy": "fromEnvironment",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,
