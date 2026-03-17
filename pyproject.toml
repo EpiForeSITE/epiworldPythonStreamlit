@@ -9,3 +9,8 @@ dependencies = [
     "pyyaml>=6.0.3",
     "openpyxl>=3.1.5",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.6",
+]
