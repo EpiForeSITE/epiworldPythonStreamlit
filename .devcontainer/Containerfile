@@ -33,7 +33,8 @@ RUN useradd -m -s $(which bash) $USERNAME \
     && apt-get update \
     && apt-get install -y sudo \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/90-nopasswd \
-    && chmod 0440 /etc/sudoers.d/90-nopasswd
+    && chmod 0440 /etc/sudoers.d/90-nopasswd \
+    && chown -R $USERNAME:$USERNAME /opt/venv /opt/uv-python
 
 # Final setup
 USER $USERNAME
