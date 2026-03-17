@@ -6,21 +6,25 @@ ARG USERNAME=dev
 
 # Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PATH="/root/.local/bin:${PATH}"
+ENV UV_LINK_MODE=copy
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Prepare Python dependencies
-COPY ./requirements.txt /tmp/requirements.txt
+# Prepare Python dependencies (copy only metadata, not the full source)
+COPY ./pyproject.toml ./uv.lock /tmp/project/
 
 # Install system dependencies and Python, then install project dependencies
+# Using --no-install-project so only the declared dependencies are installed
+# (the project source itself is mounted at runtime via the devcontainer volume)
 RUN apt-get update && \
     apt-get install -y \
         build-essential \
         pkg-config && \
     uv python install ${PYTHON_VERSION} && \
-    uv pip install --python ${PYTHON_VERSION} --system -r /tmp/requirements.txt
+    uv --project /tmp/project sync --frozen --python ${PYTHON_VERSION} --no-install-project
 
 # Create a non-root user
 RUN useradd -m -s $(which bash) $USERNAME \
