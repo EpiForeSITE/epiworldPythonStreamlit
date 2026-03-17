@@ -3,14 +3,10 @@
 Streamlit webapp for epiworld.
 
 Please install dependencies with a dependency manager capable of reading `pyproject.toml` files
-(most modern solutions will work). For example:
+(most modern solutions will work). For example, with `uv`:
 
 ```
-# with uv
 uv sync
-
-# with pip
-pip install -e .
 ```
 
 Please note that this step is not required if working in a containerized context.
@@ -18,11 +14,7 @@ Please note that this step is not required if working in a containerized context
 You may then run with:
 
 ```
-# uv
 uv run -m streamlit run app.py
-
-# pip
-streamlit run app.py
 ```
 
 ## Launch the App online
