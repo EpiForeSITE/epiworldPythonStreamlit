@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 # Build arguments
 ARG PYTHON_VERSION=3.12
@@ -11,26 +11,21 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install system dependencies
+# Prepare Python dependencies
+COPY ./requirements.txt /tmp/requirements.txt
+
+# Install system dependencies and Python, then install project dependencies
 RUN apt-get update && \
     apt-get install -y \
-        git \
-        curl \
-        sudo \
         build-essential \
         pkg-config && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Python
-RUN uv python install ${PYTHON_VERSION}
-
-# Copy requirements and install Python dependencies
-COPY ./requirements.txt /tmp/requirements.txt
-RUN uv pip install --python ${PYTHON_VERSION} --system -r /tmp/requirements.txt
+    uv python install ${PYTHON_VERSION} && \
+    uv pip install --python ${PYTHON_VERSION} --system -r /tmp/requirements.txt
 
 # Create a non-root user
 RUN useradd -m -s $(which bash) $USERNAME \
+    && apt-get update \
+    && apt-get install -y sudo \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/90-nopasswd \
     && chmod 0440 /etc/sudoers.d/90-nopasswd
 
