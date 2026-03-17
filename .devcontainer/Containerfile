@@ -8,6 +8,7 @@ ARG USERNAME=dev
 ENV DEBIAN_FRONTEND=noninteractive
 ENV UV_LINK_MODE=copy
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Install uv
@@ -24,7 +25,8 @@ RUN apt-get update && \
         build-essential \
         pkg-config && \
     uv python install ${PYTHON_VERSION} && \
-    uv --project /tmp/project sync --frozen --python ${PYTHON_VERSION} --no-install-project
+    uv --project /tmp/project sync --frozen --python ${PYTHON_VERSION} --no-install-project && \
+    chmod -R a+rX /opt/uv-python /opt/venv
 
 # Create a non-root user
 RUN useradd -m -s $(which bash) $USERNAME \
