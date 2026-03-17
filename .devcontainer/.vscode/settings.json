@@ -1,6 +1,5 @@
 {
     "python.defaultInterpreterPath": "/opt/venv/bin/python",
-    "python.analysis.typeCheckingMode": "basic",
     "ruff.importStrategy": "fromEnvironment",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
