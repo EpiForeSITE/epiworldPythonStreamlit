@@ -1,42 +1,29 @@
 import os
-import yaml
+import importlib.resources
 import streamlit as st
 import inspect
 
-from utils.model_loader import discover_models, load_model_from_file
-from utils.parameter_loader import load_model_params, flatten_dict
-from utils.section_renderer import render_sections
-from utils.parameter_ui import render_parameters_with_indent, reset_parameters_to_defaults
-from utils.excel_model_runner import (
+from epicc.config import CONFIG
+from epicc.utils.model_loader import discover_models, load_model_from_file
+from epicc.utils.parameter_loader import load_model_params, flatten_dict
+from epicc.utils.section_renderer import render_sections
+from epicc.utils.parameter_ui import render_parameters_with_indent, reset_parameters_to_defaults
+from epicc.utils.excel_model_runner import (
     load_excel_params_defaults_with_computed,
     run_excel_driven_model,
     get_scenario_headers
 )
 
-# DIRECTORY & CONFIG
-base_dir = os.path.dirname(os.path.abspath(__file__))
-
-with open(os.path.join(base_dir, "config/app.yaml")) as f:
-    app_config = yaml.safe_load(f)
-
-with open(os.path.join(base_dir, "config/paths.yaml")) as f:
-    path_config = yaml.safe_load(f)
-
-
 # UI STYLES
-def load_css(file_path: str):
-    if os.path.exists(file_path):
-        with open(file_path) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-
-load_css(os.path.join(base_dir, "styles/sidebar.css"))
+with importlib.resources.files("epicc").joinpath("styles/sidebar.css").open("rb") as f:
+    css_content = f.read().decode("utf-8")
+    st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
 # MODEL SELECTION
 st.sidebar.header("Simulation Controls")
 
-selected_path = os.path.join(base_dir, path_config["model_paths"]["selected_path"])
-default_custom_path = os.path.join(base_dir, path_config["model_paths"]["custom_path"])
+selected_path = os.path.join(CONFIG.model_paths.selected_path)
+default_custom_path = os.path.join(CONFIG.model_paths.custom_path)
 
 user_custom_path = st.sidebar.text_input(
     "Custom Models Folder",
