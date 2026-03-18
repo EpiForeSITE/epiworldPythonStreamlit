@@ -3,7 +3,7 @@
 Streamlit webapp for epiworld.
 
 Please install dependencies with a dependency manager capable of reading `pyproject.toml` files
-(most modern solutions will work). For example, with `uv`:
+(most modern solutions will work). For example, with [`uv`](https://docs.astral.sh/uv/):
 
 ```
 uv sync
