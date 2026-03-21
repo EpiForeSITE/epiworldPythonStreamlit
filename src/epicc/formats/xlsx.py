@@ -6,10 +6,12 @@ Generic reader for XLSX parameter files. Expects a spreadsheet with at least two
     - Column C (optional): description or notes, ignored during loading
 """
 
-import openpyxl
 from io import BytesIO
-from openpyxl import Workbook
 from typing import IO, Any
+
+import openpyxl
+from openpyxl import Workbook
+
 from epicc.formats.base import BaseFormat
 
 # Expected column indices (0-based)
@@ -49,18 +51,22 @@ class XLSXFormat(BaseFormat[Workbook]):
         """
 
         try:
-            wb = openpyxl.load_workbook(data, read_only=True, data_only=False)
+            wb = openpyxl.load_workbook(data, data_only=False)
         except Exception as e:
             raise ValueError(f"Failed to open XLSX file {self.path}") from e
 
         ws = wb.active
         if not ws or ws.max_column < 2:
-            raise ValueError(f"XLSX file {self.path} must have at least 2 columns for parameters and values.")
+            raise ValueError(
+                f"XLSX file {self.path} must have at least 2 columns for parameters and values."
+            )
 
         rows = list(ws.iter_rows(values_only=True))
 
         if len(rows) < 2:
-            raise ValueError(f"XLSX file {self.path} must have a header row and at least one data row.")
+            raise ValueError(
+                f"XLSX file {self.path} must have a header row and at least one data row."
+            )
 
         opaque: dict[str, Any] = {}
 
@@ -76,9 +82,8 @@ class XLSXFormat(BaseFormat[Workbook]):
 
             _set_nested(opaque, key, value)
 
-        wb.close()
         return opaque, wb
-    
+
     def write(self, data: dict[str, Any], template: Workbook | None = None) -> bytes:
         """
         Write a dictionary to an XLSX file.
@@ -101,7 +106,7 @@ class XLSXFormat(BaseFormat[Workbook]):
             key_cell = row[_COL_PARAMETER]
             val_cell = row[_COL_VALUE]
             if key_cell.value in data:
-                val_cell.value = data[key_cell.value] # type: ignore
+                val_cell.value = data[key_cell.value]  # type: ignore
 
         # Awful, but openpyxl is only capable of doing it this way.
         output = BytesIO()
@@ -125,7 +130,8 @@ def _set_nested(d: dict, key: str, value: Any) -> None:
     parts = key.split(".")
     for part in parts[:-1]:
         d = d.setdefault(part, {})
-        
+
     d[parts[-1]] = value
+
 
 __all__ = ["XLSXFormat"]

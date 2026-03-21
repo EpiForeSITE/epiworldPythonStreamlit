@@ -3,8 +3,11 @@ Generic reader for YAML parameter files. Excepts a YAML file with a mapping at t
 is parsed into a dictionary.
 """
 
-from ruamel.yaml import YAML
+from io import StringIO
 from typing import IO, Any
+
+from ruamel.yaml import YAML
+
 from epicc.formats.base import BaseFormat
 
 
@@ -28,7 +31,7 @@ class YAMLFormat(BaseFormat[YAML]):
                 or if the top-level structure is not a mapping.
         """
 
-        yaml = YAML()
+        yaml = YAML(typ="safe")
 
         try:
             data = yaml.load(data)
@@ -41,7 +44,7 @@ class YAMLFormat(BaseFormat[YAML]):
             )
 
         return data, yaml
-    
+
     def write(self, data: dict[str, Any], template: YAML | None = None) -> bytes:
         """Write a dictionary to a YAML file.
 
@@ -54,8 +57,10 @@ class YAMLFormat(BaseFormat[YAML]):
             Byte array containing the YAML data, UTF-8 encoded.
         """
 
-        yaml = template or YAML()
-        output = yaml.dump(data)
-        return output.encode("utf-8")
-    
+        yaml = template or YAML(typ="safe")
+        output = StringIO()
+        yaml.dump(data, output)
+        return output.getvalue().encode("utf-8")
+
+
 __all__ = ["YAMLFormat"]

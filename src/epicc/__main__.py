@@ -1,278 +1,232 @@
-import os
 import importlib.resources
+from typing import Any
+
 import streamlit as st
-import inspect
 
 from epicc.config import CONFIG
-from epicc.utils.model_loader import discover_models, load_model_from_file
-from epicc.utils.parameter_loader import load_model_params, flatten_dict
-from epicc.utils.section_renderer import render_sections
-from epicc.utils.parameter_ui import render_parameters_with_indent, reset_parameters_to_defaults
+from epicc.formats import VALID_PARAMETER_SUFFIXES
+from epicc.model.base import BaseSimulationModel
 from epicc.utils.excel_model_runner import (
+    get_scenario_headers,
     load_excel_params_defaults_with_computed,
     run_excel_driven_model,
-    get_scenario_headers
 )
-
-# UI STYLES
-with importlib.resources.files("epicc").joinpath("styles/sidebar.css").open("rb") as f:
-    css_content = f.read().decode("utf-8")
-    st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
-
-# MODEL SELECTION
-st.sidebar.header("Simulation Controls")
-
-selected_path = os.path.join(CONFIG.model_paths.selected_path)
-default_custom_path = os.path.join(CONFIG.model_paths.custom_path)
-
-user_custom_path = st.sidebar.text_input(
-    "Custom Models Folder",
-    value=default_custom_path
+from epicc.utils.model_loader import get_built_in_models
+from epicc.utils.parameter_loader import load_model_params
+from epicc.utils.parameter_ui import (
+    render_parameters_with_indent,
+    reset_parameters_to_defaults,
 )
+from epicc.utils.section_renderer import render_sections
 
-selected_models = discover_models(selected_path)
-custom_models = discover_models(user_custom_path)
 
-model_options = {}
-model_options["Excel Driven Model"] = "__EXCEL_DRIVEN__"
-model_options.update({name: file for name, file in selected_models.items()})
-model_options.update({f"Custom: {name}": file for name, file in custom_models.items()})
+def _load_styles() -> None:
+    with importlib.resources.files("epicc").joinpath("web/sidebar.css").open("rb") as f:
+        css_content = f.read().decode("utf-8")
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
-if not model_options:
-    st.sidebar.warning("No valid model files found.")
-    st.stop()
 
-selected_label = st.sidebar.selectbox(
-    "Select Model",
-    list(model_options.keys())
-)
+def _sync_active_model(model_key: str) -> dict[str, Any]:
+    active_model_key = st.session_state.get("active_model_key")
+    if active_model_key != model_key:
+        st.session_state.active_model_key = model_key
+        st.session_state.params = {}
 
-selected_model_file = model_options[selected_label]
+    if "params" not in st.session_state:
+        st.session_state.params = {}
 
-# MODEL CHANGE RESET
-model_key = (
-    "__EXCEL_DRIVEN__"
-    if selected_model_file == "__EXCEL_DRIVEN__"
-    else os.path.basename(selected_model_file)
-)
+    return st.session_state.params
 
-if "active_model_key" not in st.session_state:
-    st.session_state.active_model_key = model_key
-    st.session_state.params = {}
 
-elif st.session_state.active_model_key != model_key:
-    st.session_state.active_model_key = model_key
-    st.session_state.params = {}
-
-params = st.session_state.params
-label_overrides = {}
-
-# PARAMETER INPUTS
-st.sidebar.subheader("Input Parameters")
-
-# EXCEL-DRIVEN MODEL
-if selected_model_file == "__EXCEL_DRIVEN__":
+def _render_excel_parameter_inputs(
+    params: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    label_overrides: dict[str, str] = {}
 
     uploaded_excel_model = st.sidebar.file_uploader(
-        "Upload Excel model file (.xlsx)",
-        type=["xlsx"],
-        key="excel_model_uploader"
+        "Upload Excel model file (.xlsx)", type=["xlsx"], key="excel_model_uploader"
     )
+    if not uploaded_excel_model:
+        st.sidebar.info("Upload an Excel model file to edit parameters.")
+        return params, label_overrides
 
-    if uploaded_excel_model:
-
-        # reset params if Excel file changes
-        if (
-                "excel_active_name" not in st.session_state
-                or st.session_state.excel_active_name != uploaded_excel_model.name
-        ):
-            st.session_state.excel_active_name = uploaded_excel_model.name
-            st.session_state.params = {}
-
+    uploaded_excel_name = uploaded_excel_model.name
+    if st.session_state.get("excel_active_name") != uploaded_excel_name:
+        st.session_state.excel_active_name = uploaded_excel_name
+        st.session_state.params = {}
         params = st.session_state.params
 
-        # Load the defaults
-        editable_defaults, _ = load_excel_params_defaults_with_computed(
-            uploaded_excel_model,
-            sheet_name=None,
-            start_row=3
-        )
+    editable_defaults, _ = load_excel_params_defaults_with_computed(
+        uploaded_excel_model, sheet_name=None, start_row=3
+    )
+    current_headers = get_scenario_headers(uploaded_excel_model)
 
-        # Load Headers
-        current_headers = get_scenario_headers(uploaded_excel_model)
+    def handle_reset_excel() -> None:
+        reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_name)
+        for col_letter, default_text in current_headers.items():
+            st.session_state[f"label_override_{col_letter}"] = default_text
+
+    st.sidebar.button("Reset Parameters", on_click=handle_reset_excel)
+
+    if current_headers:
+        with st.sidebar.expander("Output Scenario Headers", expanded=False):
+            st.caption("Rename the output headers (B, C, D, E)")
+            for col_letter in sorted(current_headers.keys()):
+                default_text = current_headers[col_letter]
+                widget_key = f"label_override_{col_letter}"
+                if widget_key in st.session_state:
+                    label_overrides[col_letter] = st.text_input(
+                        f"Column {col_letter} Label", key=widget_key
+                    )
+                    continue
+
+                label_overrides[col_letter] = st.text_input(
+                    f"Column {col_letter} Label",
+                    value=default_text,
+                    key=widget_key,
+                )
+
+    render_parameters_with_indent(
+        editable_defaults, params, model_id=uploaded_excel_name
+    )
+    return params, label_overrides
 
 
-        # RESET CALLBACK
-        def handle_reset_excel():
-            # 1. Reset Parameters
-            reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_model.name)
-            # 2. Reset Header Labels
-            if current_headers:
-                for col_letter, default_text in current_headers.items():
-                    st.session_state[f"label_override_{col_letter}"] = default_text
+def _render_python_parameter_inputs(
+    model: BaseSimulationModel,
+    model_key: str,
+    params: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    label_overrides: dict[str, str] = {}
 
-
-        # Display Button with Callback
-        st.sidebar.button("Reset Parameters", on_click=handle_reset_excel)
-
-        # Outcome Headers (Column B-E)
-        if current_headers:
-            with st.sidebar.expander("Output Scenario Headers", expanded=False):
-                st.caption("Rename the output headers (B, C, D, E)")
-
-                for col_letter in sorted(current_headers.keys()):
-                    default_text = current_headers[col_letter]
-                    widget_key = f"label_override_{col_letter}"
-
-                    # Robust Widget Logic
-                    if widget_key in st.session_state:
-                        new_text = st.text_input(
-                            f"Column {col_letter} Label",
-                            key=widget_key
-                        )
-                    else:
-                        new_text = st.text_input(
-                            f"Column {col_letter} Label",
-                            value=default_text,
-                            key=widget_key
-                        )
-                    label_overrides[col_letter] = new_text
-
-        # Render Main Parameters
-        render_parameters_with_indent(
-            editable_defaults,
-            params,
-            model_id=uploaded_excel_model.name
-        )
-
-    else:
-        st.sidebar.info("Upload an Excel model file to edit parameters.")
-
-# PYTHON MODEL
-else:
-    param_source = st.sidebar.radio(
-        "Parameter Source",
-        ["Model Default (YAML)", "Excel (.xlsx)", "YAML (.yaml)"],
-        horizontal=True
+    sorted_suffixes = sorted(VALID_PARAMETER_SUFFIXES)
+    uploaded_params = st.sidebar.file_uploader(
+        "Optional parameter override file",
+        type=sorted_suffixes,
+        help="If omitted, model defaults are used.",
     )
 
-    uploaded_excel = None
-    uploaded_yaml = None
-
-    if param_source == "Excel (.xlsx)":
-        uploaded_excel = st.sidebar.file_uploader("Upload Excel parameter file", type=["xlsx"])
-    elif param_source == "YAML (.yaml)":
-        uploaded_yaml = st.sidebar.file_uploader("Upload YAML parameter file", type=["yaml", "yml"])
-
-    # PARAMETER SOURCE RESET LOGIC
     param_identity = (
-        param_source,
-        uploaded_excel.name if uploaded_excel else None,
-        uploaded_yaml.name if uploaded_yaml else None,
+        "upload" if uploaded_params else "default",
+        uploaded_params.name if uploaded_params else None,
+    )
+    if st.session_state.get("active_param_identity") != param_identity:
+        st.session_state.active_param_identity = param_identity
+        st.session_state.params = {}
+        params = st.session_state.params
+
+    model_defaults = load_model_params(
+        model,
+        uploaded_params=uploaded_params or None,
+        uploaded_name=uploaded_params.name if uploaded_params else None,
     )
 
-    if "active_param_identity" not in st.session_state:
-        st.session_state.active_param_identity = param_identity
-        st.session_state.params = {}
-    elif st.session_state.active_param_identity != param_identity:
-        st.session_state.active_param_identity = param_identity
-        st.session_state.params = {}
-
-    params = st.session_state.params
-
-    if param_source == "YAML (.yaml)" and uploaded_yaml:
-        raw = yaml.safe_load(uploaded_yaml) or {}
-        model_defaults = flatten_dict(raw)
-    else:
-        model_defaults = load_model_params(
-            selected_model_file,
-            uploaded_excel=uploaded_excel
-        )
-
-    # Load Python Model Module to check for Labels
-    model_module = load_model_from_file(selected_model_file)
-    # Check for SCENARIO_LABELS constant in the python file
-    current_headers = getattr(model_module, "SCENARIO_LABELS", None)
-
-    if model_defaults:
-        # Define Python Model Reset Callback
-        def handle_reset_python():
-            # 1. Reset Parameters
-            reset_parameters_to_defaults(model_defaults, params, model_key)
-            # 2. Reset Header Labels
-            if current_headers:
-                for key, default_text in current_headers.items():
-                    # We use a unique key format for python models to avoid conflicts
-                    st.session_state[f"py_label_{model_key}_{key}"] = default_text
-
-
-        st.sidebar.button("Reset Parameters", on_click=handle_reset_python)
-
-        # SCENARIO LABELS (PYTHON)
-        if current_headers:
-            with st.sidebar.expander("Output Scenario Headers", expanded=False):
-                st.caption("Rename the output headers")
-
-                for key, default_text in current_headers.items():
-                    widget_key = f"py_label_{model_key}_{key}"
-
-                    if widget_key in st.session_state:
-                        new_val = st.text_input(f"Label for '{default_text}'", key=widget_key)
-                    else:
-                        new_val = st.text_input(f"Label for '{default_text}'", value=default_text, key=widget_key)
-
-                    label_overrides[key] = new_val
-
-        render_parameters_with_indent(
-            model_defaults,
-            params,
-            model_id=model_key
-        )
-    else:
+    if not model_defaults:
         st.sidebar.info("No default parameters defined for this model.")
+        return params, label_overrides
 
-# RUN SIMULATION
-if st.sidebar.button("Run Simulation"):
+    current_headers = model.scenario_labels
 
-    # EXCEL-DRIVEN MODEL RUN
-    if selected_model_file == "__EXCEL_DRIVEN__":
+    def handle_reset_python() -> None:
+        reset_parameters_to_defaults(model_defaults, params, model_key)
+        if not current_headers:
+            return
 
-        uploaded_excel_model = st.session_state.get("excel_model_uploader")
+        for key, default_text in current_headers.items():
+            st.session_state[f"py_label_{model_key}_{key}"] = default_text
 
-        if not uploaded_excel_model:
-            st.error("Please upload an Excel model file first.")
-            st.stop()
+    st.sidebar.button("Reset Parameters", on_click=handle_reset_python)
 
-        with st.spinner(f"Running Excel-driven model: {uploaded_excel_model.name}..."):
+    if current_headers:
+        with st.sidebar.expander("Output Scenario Headers", expanded=False):
+            st.caption("Rename the output headers")
+            for key, default_text in current_headers.items():
+                widget_key = f"py_label_{model_key}_{key}"
+                default_label = str(default_text)
+                if widget_key in st.session_state:
+                    label_overrides[key] = st.text_input(
+                        f"Label for '{default_label}'", key=widget_key
+                    )
+                    continue
 
-            results = run_excel_driven_model(
-                excel_file=uploaded_excel_model,
-                filename=uploaded_excel_model.name,
-                params=params,
-                sheet_name=None,
-                label_overrides=label_overrides
-            )
+                label_overrides[key] = st.text_input(
+                    f"Label for '{default_label}'",
+                    value=default_label,
+                    key=widget_key,
+                )
 
-            st.title(results.get("model_title", "Excel Driven Model"))
-            st.write(results.get("model_description", ""))
+    render_parameters_with_indent(model_defaults, params, model_id=model_key)
+    return params, label_overrides
 
-            render_sections(results["sections"])
 
-    # PYTHON MODEL RUN
-    else:
-        with st.spinner(f"Running {selected_label}..."):
-            # Load module again (or reuse)
-            model_module = load_model_from_file(selected_model_file)
+def _run_excel_simulation(
+    params: dict[str, Any], label_overrides: dict[str, str]
+) -> None:
+    uploaded_excel_model = st.session_state.get("excel_model_uploader")
+    if not uploaded_excel_model:
+        st.error("Please upload an Excel model file first.")
+        st.stop()
 
-            st.title(getattr(model_module, "model_title", app_config["title"]))
-            st.write(getattr(model_module, "model_description", app_config["description"]))
+    with st.spinner(f"Running Excel-driven model: {uploaded_excel_model.name}..."):
+        results = run_excel_driven_model(
+            excel_file=uploaded_excel_model,
+            filename=uploaded_excel_model.name,
+            params=params,
+            sheet_name=None,
+            label_overrides=label_overrides,
+        )
+        st.title(results.get("model_title", "Excel Driven Model"))
+        st.write(results.get("model_description", ""))
+        render_sections(results["sections"])
 
-            # Check if run_model accepts label_overrides
-            sig = inspect.signature(model_module.run_model)
-            if "label_overrides" in sig.parameters:
-                results = model_module.run_model(params, label_overrides=label_overrides)
-            else:
-                results = model_module.run_model(params)
 
-            sections = model_module.build_sections(results)
-            render_sections(sections)
+def _run_python_simulation(
+    selected_label: str,
+    model: BaseSimulationModel,
+    params: dict[str, Any],
+    label_overrides: dict[str, str],
+) -> None:
+    with st.spinner(f"Running {selected_label}..."):
+        st.title(model.model_title or CONFIG.app.title)
+        st.write(model.model_description or CONFIG.app.description)
+        results = model.run(params, label_overrides=label_overrides)
+        render_sections(model.build_sections(results))
+
+
+_load_styles()
+
+st.sidebar.header("Simulation Controls")
+
+built_in_models = get_built_in_models()
+model_registry: dict[str, BaseSimulationModel] = {
+    m.human_name(): m for m in built_in_models
+}
+model_labels = [*model_registry.keys(), "Excel Driven Model"]
+
+selected_label = st.sidebar.selectbox("Select Model", model_labels, index=0)
+is_excel_model = selected_label == "Excel Driven Model"
+model_key = selected_label
+
+params = _sync_active_model(model_key)
+
+st.sidebar.subheader("Input Parameters")
+
+if is_excel_model:
+    params, label_overrides = _render_excel_parameter_inputs(params)
+else:
+    params, label_overrides = _render_python_parameter_inputs(
+        model_registry[selected_label],
+        model_key,
+        params,
+    )
+
+if not st.sidebar.button("Run Simulation"):
+    st.stop()
+
+if is_excel_model:
+    _run_excel_simulation(params, label_overrides)
+    st.stop()
+
+_run_python_simulation(
+    selected_label, model_registry[selected_label], params, label_overrides
+)

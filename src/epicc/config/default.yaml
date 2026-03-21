@@ -5,7 +5,3 @@ app:
 defaults:
   decimal_precision: 4
   ui_theme: light
-
-model_paths:
-  selected_path: models
-  custom_path: custom_models

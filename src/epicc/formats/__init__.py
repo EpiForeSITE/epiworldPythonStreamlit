@@ -13,11 +13,13 @@ organize parameters in that format.
 """
 
 from pathlib import Path
-from typing import IO, TypeVar, Any
+from typing import IO, Any, TypeVar
+
 from pydantic import BaseModel
+
 from epicc.formats.base import BaseFormat
-from epicc.formats.yaml import YAMLFormat
 from epicc.formats.xlsx import XLSXFormat
+from epicc.formats.yaml import YAMLFormat
 
 M = TypeVar("M", bound=BaseModel)
 """Type variable for Pydantic models used in validation."""
@@ -26,11 +28,11 @@ _FORMATS: dict[str, type[BaseFormat]] = {
     ".yaml": YAMLFormat,
     ".yml": YAMLFormat,
     ".xlsx": XLSXFormat,
-    ".xls": XLSXFormat,
 }
 
 VALID_PARAMETER_SUFFIXES = set(k[1:] for k in _FORMATS.keys())
 """Set of valid file suffixes for parameter files. These do not begin with a dot."""
+
 
 def get_format(path: Path | str) -> BaseFormat:
     """Return the appropriate reader for the given file path.
@@ -52,8 +54,9 @@ def get_format(path: Path | str) -> BaseFormat:
         raise ValueError(
             f"Unsupported file format '{suffix}'. Supported formats: {supported}"
         )
-    
+
     return reader_class(path)
+
 
 def opaque_to_typed(data: dict, model: type[M]) -> M:
     """
@@ -65,7 +68,8 @@ def opaque_to_typed(data: dict, model: type[M]) -> M:
     except Exception as e:
         raise ValueError(f"Data validation failed: {e}") from e
 
-def read_parameters(path: Path | str, data: IO, model: type[M]) -> tuple[M, Any]:
+
+def read_from_format(path: Path | str, data: IO, model: type[M]) -> tuple[M, Any]:
     """
     Read parameters from the given file path, and validate. See get_format() and
     opaque_to_typed() for details.
@@ -81,4 +85,13 @@ def read_parameters(path: Path | str, data: IO, model: type[M]) -> tuple[M, Any]
 
     return opaque_to_typed(opaque, model), template
 
-__all__ = ["BaseFormat", "YAMLFormat", "XLSXFormat", "get_format", "opaque_to_typed", "read_parameters"]
+
+__all__ = [
+    "VALID_PARAMETER_SUFFIXES",
+    "BaseFormat",
+    "YAMLFormat",
+    "XLSXFormat",
+    "get_format",
+    "opaque_to_typed",
+    "read_from_format",
+]

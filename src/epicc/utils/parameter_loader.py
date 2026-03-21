@@ -1,61 +1,50 @@
-import os
-import yaml
-import pandas as pd
-from decimal import Decimal
-import re
+from __future__ import annotations
+
+from pathlib import Path
+from typing import IO, Any
+
+from pydantic import RootModel
+
+from epicc.formats import read_from_format
+from epicc.model.base import BaseSimulationModel
 
 
-def load_params_from_excel(excel_file):
-    df = pd.read_excel(
-        excel_file,
-        usecols="F:H",
-        header=1
-    )
-
-    df.columns = [str(c).strip().lower() for c in df.columns]
-
-    if not {"parameter", "value"}.issubset(df.columns):
-        raise ValueError("Expected columns Parameter and Value in F:G")
-
-    params = {}
-    for _, row in df.iterrows():
-        if pd.isna(row["parameter"]) or pd.isna(row["value"]):
-            continue
-
-        cleaned = re.sub(r"[^0-9.\-]", "", str(row["value"]))
-        if cleaned == "":
-            continue
-
-        params[str(row["parameter"]).strip()] = Decimal(cleaned)
-
-    return params
+class OpaqueParameters(RootModel[dict[str, Any]]):
+    """Minimal typed envelope for opaque parameter payloads."""
 
 
-def flatten_dict(d, level=0):
-    flat = {}
-    for key, value in d.items():
+def flatten_dict(data: dict[str, Any], level: int = 0) -> dict[str, Any]:
+    """Flatten nested dictionaries for the sidebar renderer using tab-indented labels."""
+
+    flat: dict[str, Any] = {}
+    for key, value in data.items():
         indented_key = ("\t" * level) + str(key)
-
         if isinstance(value, dict):
             flat[indented_key] = None
             flat.update(flatten_dict(value, level + 1))
-        else:
-            flat[indented_key] = value
+            continue
+
+        flat[indented_key] = value
+
     return flat
 
 
-def load_model_params(model_file_path, uploaded_excel=None):
-    if uploaded_excel:
-        return load_params_from_excel(uploaded_excel)
+def _load_typed_params(path: Path, data: IO[bytes]) -> dict[str, Any]:
+    typed, _ = read_from_format(path, data, OpaqueParameters)
+    return typed.root
 
-    base = os.path.dirname(model_file_path)
-    name = os.path.basename(model_file_path).replace(".py", "")
-    yaml_path = os.path.join(base, f"{name}.yaml")
 
-    if not os.path.exists(yaml_path):
-        return {}
+def load_model_params(
+    model: BaseSimulationModel,
+    uploaded_params: IO[bytes] | None = None,
+    uploaded_name: str | None = None,
+) -> dict[str, Any]:
+    """Load model parameters from upload or model defaults."""
 
-    with open(yaml_path, "r") as f:
-        raw = yaml.safe_load(f) or {}
+    if uploaded_params is not None:
+        if not uploaded_name:
+            raise ValueError("Uploaded parameter files must include a filename.")
+        uploaded_params.seek(0)
+        return flatten_dict(_load_typed_params(Path(uploaded_name), uploaded_params))
 
-    return flatten_dict(raw)
+    return flatten_dict(model.default_params())
