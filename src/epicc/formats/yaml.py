@@ -6,6 +6,7 @@ is parsed into a dictionary.
 from io import StringIO
 from typing import IO, Any
 
+from pydantic import BaseModel
 from ruamel.yaml import YAML
 
 from epicc.formats.base import BaseFormat
@@ -61,6 +62,15 @@ class YAMLFormat(BaseFormat[YAML]):
         output = StringIO()
         yaml.dump(data, output)
         return output.getvalue().encode("utf-8")
+
+    def write_template(self, model: BaseModel) -> bytes:
+        """Write a YAML template from a model instance.
+
+        The model is dumped to a nested mapping; the natural YAML structure
+        is preserved without flattening. Descriptions are not embedded as
+        comments (YAML comment support is left to a future enhancement).
+        """
+        return self.write(model.model_dump())
 
 
 __all__ = ["YAMLFormat"]

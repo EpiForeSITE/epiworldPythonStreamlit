@@ -2,6 +2,8 @@ from typing import Any, IO, Generic, TypeVar
 from pathlib import Path
 from abc import ABC, abstractmethod
 
+from pydantic import BaseModel
+
 T = TypeVar("T")
 
 class BaseFormat(ABC, Generic[T]):
@@ -12,11 +14,11 @@ class BaseFormat(ABC, Generic[T]):
     def __init__(self, path: Path | str) -> None:
         """
         Initialize the reader.
-        
+
         Parameters:
             path: Path to the file to read. If a string, it will be converted to a Path object.
         """
-        
+
         self.path = Path(path) if isinstance(path, str) else path
 
     @abstractmethod
@@ -60,5 +62,26 @@ class BaseFormat(ABC, Generic[T]):
         """
 
         ...
+
+    @abstractmethod
+    def write_template(self, model: BaseModel) -> bytes:
+        """
+        Generate a fill-in template from a populated model instance.
+
+        The model will have been instantiated with defaults and placeholder
+        values. Each backend serialises it in a format-appropriate way,
+        including field descriptions where the format supports them.
+
+        Args:
+            model: A ``BaseModel`` instance whose values serve as the template
+                defaults. Field metadata (descriptions, etc.) is available via
+                ``type(model).model_fields``.
+
+        Returns:
+            Byte array of the template in the appropriate format.
+        """
+
+        ...
+
 
 __all__ = ["BaseFormat"]

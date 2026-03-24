@@ -11,6 +11,7 @@ from typing import IO, Any
 
 import openpyxl
 from openpyxl import Workbook
+from pydantic import BaseModel
 
 from epicc.formats.base import BaseFormat
 
@@ -112,6 +113,39 @@ class XLSXFormat(BaseFormat[Workbook]):
         output = BytesIO()
         wb.save(output)
         return output.getvalue()
+
+    def write_template(self, model: BaseModel) -> bytes:
+        """Write an XLSX template from a model instance.
+
+        Produces a three-column spreadsheet (Parameter, Value, Description).
+        Nested models are flattened to dot-notation keys. Descriptions come
+        from ``Field(description=...)`` on each field.
+        """
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.append(["Parameter", "Value", "Description"])
+        for key, value, description in _flatten(model):
+            ws.append([key, value, description])
+        output = BytesIO()
+        wb.save(output)
+        return output.getvalue()
+
+
+def _flatten(
+    model: BaseModel, prefix: str = ""
+) -> list[tuple[str, Any, str]]:
+    """Recursively flatten a model instance to ``[(dot_key, value, description)]``."""
+    rows: list[tuple[str, Any, str]] = []
+    for name, field_info in type(model).model_fields.items():
+        key = f"{prefix}.{name}" if prefix else name
+        value = getattr(model, name)
+        description = field_info.description or ""
+        if isinstance(value, BaseModel):
+            rows.extend(_flatten(value, prefix=key))
+        else:
+            rows.append((key, value, description))
+    return rows
 
 
 def _set_nested(d: dict, key: str, value: Any) -> None:

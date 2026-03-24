@@ -18,6 +18,7 @@ from typing import IO, Any, TypeVar
 from pydantic import BaseModel
 
 from epicc.formats.base import BaseFormat
+from epicc.formats.template import generate_template
 from epicc.formats.xlsx import XLSXFormat
 from epicc.formats.yaml import YAMLFormat
 
@@ -91,6 +92,7 @@ __all__ = [
     "BaseFormat",
     "YAMLFormat",
     "XLSXFormat",
+    "generate_template",
     "get_format",
     "opaque_to_typed",
     "read_from_format",
