@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import os
-import re
 import ast
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
+
+from epicc.utils.parameter_loader import flatten_dict
 
 _CELL_REF_RE = re.compile(r"(\$?[A-Z]{1,3}\$?\d+)")
 _RANGE_REF_RE = re.compile(r"(\$?[A-Z]{1,3}\$?\d+)\s*:\s*(\$?[A-Z]{1,3}\$?\d+)")
@@ -173,10 +174,10 @@ class ExcelValue:
         return self._binary_op(other, lambda a, b: b / a if a != 0 else 0.0)
 
     def __pow__(self, other):
-        return self._binary_op(other, lambda a, b: a ** b)
+        return self._binary_op(other, lambda a, b: a**b)
 
     def __rpow__(self, other):
-        return self._binary_op(other, lambda a, b: b ** a)
+        return self._binary_op(other, lambda a, b: b**a)
 
     def _binary_op(self, other, op):
         other_val = other.value if isinstance(other, ExcelValue) else other
@@ -185,11 +186,17 @@ class ExcelValue:
         other_is_list = isinstance(other_val, list)
 
         if self_is_list and other_is_list:
-            return ExcelValue([op(_to_float(a), _to_float(b)) for a, b in zip(self.value, other_val)])
+            return ExcelValue(
+                [op(_to_float(a), _to_float(b)) for a, b in zip(self.value, other_val)]
+            )
         elif self_is_list:
-            return ExcelValue([op(_to_float(a), _to_float(other_val)) for a in self.value])
+            return ExcelValue(
+                [op(_to_float(a), _to_float(other_val)) for a in self.value]
+            )
         elif other_is_list:
-            return ExcelValue([op(_to_float(self.value), _to_float(b)) for b in other_val])
+            return ExcelValue(
+                [op(_to_float(self.value), _to_float(b)) for b in other_val]
+            )
         else:
             return ExcelValue(op(_to_float(self.value), _to_float(other_val)))
 
@@ -279,12 +286,7 @@ class FormulaEngine:
         expr = expr.replace("<>", "!=")
         expr = re.sub(r"(?<![<>=!])=(?![<>=])", "==", expr)
 
-
-        expr = re.sub(
-            r'(".*?")\s*\+\s*(VAL\(\"[A-Z]+\d+\"\))',
-            r'\1 + STR(\2)',
-            expr
-        )
+        expr = re.sub(r'(".*?")\s*\+\s*(VAL\(\"[A-Z]+\d+\"\))', r"\1 + STR(\2)", expr)
 
         expr = expr.replace("^", "**")
 
@@ -462,18 +464,6 @@ class FormulaEngine:
             return [float(_to_float(v)) for v in out]
         return float(_to_float(out))
 
-def flatten_dict(d: dict, level: int = 0) -> Dict[str, Any]:
-    flat: Dict[str, Any] = {}
-    for key, value in d.items():
-        indented_key = ("\t" * level) + str(key)
-
-        if isinstance(value, dict):
-            flat[indented_key] = None
-            flat.update(flatten_dict(value, level + 1))
-        else:
-            flat[indented_key] = value
-    return flat
-
 
 def excel_rows_to_nested_dict(rows: List[Tuple[int, str, Any]]) -> dict:
     root: Dict[str, Any] = {}
@@ -490,13 +480,14 @@ def excel_rows_to_nested_dict(rows: List[Tuple[int, str, Any]]) -> dict:
             parent[name] = value
     return root
 
+
 def apply_params_to_workbook(
-        ws: Worksheet,
-        params: Dict[str, Any],
-        name_col: str = "F",
-        value_col: str = "G",
-        start_row: int = 3,
-        overwrite_formulas: bool = True,
+    ws: Worksheet,
+    params: Dict[str, Any],
+    name_col: str = "F",
+    value_col: str = "G",
+    start_row: int = 3,
+    overwrite_formulas: bool = True,
 ):
     lookup: Dict[str, Any] = {}
     for k, v in params.items():
@@ -514,19 +505,25 @@ def apply_params_to_workbook(
         if not name:
             continue
 
-        if (isinstance(val_cell.value, str) and str(val_cell.value).startswith("=")) and not overwrite_formulas:
+        if (
+            isinstance(val_cell.value, str) and str(val_cell.value).startswith("=")
+        ) and not overwrite_formulas:
             continue
 
-        if name in lookup and lookup[name] is not None and str(lookup[name]).strip() != "":
+        if (
+            name in lookup
+            and lookup[name] is not None
+            and str(lookup[name]).strip() != ""
+        ):
             ws[f"{value_col}{r}"].value = lookup[name]
 
 
 def load_excel_params_defaults_with_computed(
-        excel_file,
-        sheet_name: Optional[str] = None,
-        name_col: str = "F",
-        value_col: str = "G",
-        start_row: int = 3
+    excel_file,
+    sheet_name: Optional[str] = None,
+    name_col: str = "F",
+    value_col: str = "G",
+    start_row: int = 3,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
@@ -566,6 +563,7 @@ def load_excel_params_defaults_with_computed(
 
     return editable_defaults, computed_defaults
 
+
 def _find_outcome_header_row(ws: Worksheet) -> Optional[int]:
     """
     Looks for the start of the result table by finding the first
@@ -578,7 +576,9 @@ def _find_outcome_header_row(ws: Worksheet) -> Optional[int]:
     return None
 
 
-def _iter_outcome_rows(ws: Worksheet, header_row: int, scenario_cols: List[str]) -> List[int]:
+def _iter_outcome_rows(
+    ws: Worksheet, header_row: int, scenario_cols: List[str]
+) -> List[int]:
     rows: List[int] = []
     blank_streak = 0
     r = header_row + 1
@@ -609,8 +609,9 @@ def _iter_outcome_rows(ws: Worksheet, header_row: int, scenario_cols: List[str])
     return rows
 
 
-def _detect_active_scenario_columns(ws: Worksheet, header_row: int, scenario_cols: List[str], rows: List[int]) -> List[
-    str]:
+def _detect_active_scenario_columns(
+    ws: Worksheet, header_row: int, scenario_cols: List[str], rows: List[int]
+) -> List[str]:
     active: List[str] = []
     for col in scenario_cols:
         header = ws[f"{col}{header_row}"].value
@@ -626,7 +627,9 @@ def _detect_active_scenario_columns(ws: Worksheet, header_row: int, scenario_col
     return active
 
 
-def get_scenario_headers(excel_file, sheet_name: Optional[str] = None) -> Dict[str, str]:
+def get_scenario_headers(
+    excel_file, sheet_name: Optional[str] = None
+) -> Dict[str, str]:
     """
     Reads the header row (found by _find_outcome_header_row) and extracts
     current values for columns B, C, D, E.
@@ -651,14 +654,16 @@ def get_scenario_headers(excel_file, sheet_name: Optional[str] = None) -> Dict[s
 
 
 def build_sections_from_excel_outcomes(
-        ws: Worksheet,
-        engine: FormulaEngine,
-        header_row: int,
-        label_overrides: Dict[str, str] = None
+    ws: Worksheet,
+    engine: FormulaEngine,
+    header_row: int,
+    label_overrides: Dict[str, str] = None,
 ) -> List[dict]:
     scenario_cols_all = _scenario_columns_before_F(ws)
     outcome_rows = _iter_outcome_rows(ws, header_row, scenario_cols_all)
-    scenario_cols = _detect_active_scenario_columns(ws, header_row, scenario_cols_all, outcome_rows)
+    scenario_cols = _detect_active_scenario_columns(
+        ws, header_row, scenario_cols_all, outcome_rows
+    )
 
     if label_overrides is None:
         label_overrides = {}
@@ -672,7 +677,9 @@ def build_sections_from_excel_outcomes(
             col_titles[col] = label_overrides[col].strip()
         else:
             val = ws[f"{col}{header_row}"].value
-            col_titles[col] = str(val).strip() if val is not None and str(val).strip() != "" else col
+            col_titles[col] = (
+                str(val).strip() if val is not None and str(val).strip() != "" else col
+            )
 
     sections: List[dict] = []
     current_title: Optional[str] = None
@@ -693,7 +700,9 @@ def build_sections_from_excel_outcomes(
 
         if all_blank:
             if current_title and current_records:
-                sections.append({"title": current_title, "content": [pd.DataFrame(current_records)]})
+                sections.append(
+                    {"title": current_title, "content": [pd.DataFrame(current_records)]}
+                )
                 current_records = []
             current_title = a_text
             continue
@@ -705,12 +714,15 @@ def build_sections_from_excel_outcomes(
         current_records.append(rec)
 
     if current_title and current_records:
-        sections.append({"title": current_title, "content": [pd.DataFrame(current_records)]})
+        sections.append(
+            {"title": current_title, "content": [pd.DataFrame(current_records)]}
+        )
 
     if not sections and current_records:
         sections = [{"title": "Results", "content": [pd.DataFrame(current_records)]}]
 
     return sections
+
 
 def _is_numberish(v: Any) -> bool:
     if v is None or v == "":
@@ -736,7 +748,9 @@ def _cell_display(ws: Worksheet, engine: FormulaEngine, cell_ref: str) -> Any:
     return str(v).strip()
 
 
-def build_sections_from_generic_tables(ws: Worksheet, engine: FormulaEngine) -> List[dict]:
+def build_sections_from_generic_tables(
+    ws: Worksheet, engine: FormulaEngine
+) -> List[dict]:
     max_scan_rows = min(ws.max_row, 250)
     max_scan_cols = _col_to_index("E")
 
@@ -789,10 +803,20 @@ def build_sections_from_generic_tables(ws: Worksheet, engine: FormulaEngine) -> 
                 tables.append((top, left_idx, bottom, right))
 
     if not tables:
-        return [{
-            "title": "Outputs",
-            "content": [pd.DataFrame([{"Error": "No Outcome found and no output table detected in A–E."}])]
-        }]
+        return [
+            {
+                "title": "Outputs",
+                "content": [
+                    pd.DataFrame(
+                        [
+                            {
+                                "Error": "No Outcome found and no output table detected in A–E."
+                            }
+                        ]
+                    )
+                ],
+            }
+        ]
 
     tables.sort(key=lambda t: (t[2] - t[0] + 1) * (t[3] - t[1] + 1), reverse=True)
     top, left_idx, bottom, right_idx = tables[0]
@@ -801,7 +825,11 @@ def build_sections_from_generic_tables(ws: Worksheet, engine: FormulaEngine) -> 
     headers = []
     for c in range(left_idx, right_idx + 1):
         v = ws[f"{_index_to_col(c)}{header_row}"].value
-        headers.append(str(v).strip() if v is not None and str(v).strip() != "" else _index_to_col(c))
+        headers.append(
+            str(v).strip()
+            if v is not None and str(v).strip() != ""
+            else _index_to_col(c)
+        )
 
     records = []
     for r in range(header_row + 1, bottom + 1):
@@ -833,12 +861,13 @@ def build_sections_from_generic_tables(ws: Worksheet, engine: FormulaEngine) -> 
 
 # Main
 
+
 def run_excel_driven_model(
-        excel_file,
-        filename: str,
-        params: Dict[str, Any],
-        sheet_name: Optional[str] = None,
-        label_overrides: Dict[str, str] = None
+    excel_file,
+    filename: str,
+    params: Dict[str, Any],
+    sheet_name: Optional[str] = None,
+    label_overrides: Dict[str, str] = None,
 ) -> Dict[str, Any]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
@@ -849,7 +878,9 @@ def run_excel_driven_model(
     header_row = _find_outcome_header_row(ws)
 
     if header_row is not None:
-        sections = build_sections_from_excel_outcomes(ws, engine, header_row, label_overrides)
+        sections = build_sections_from_excel_outcomes(
+            ws, engine, header_row, label_overrides
+        )
     else:
         sections = build_sections_from_generic_tables(ws, engine)
 
