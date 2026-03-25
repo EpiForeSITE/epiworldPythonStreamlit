@@ -2,9 +2,10 @@ import os
 import yaml
 import streamlit as st
 import inspect
+from decimal import Decimal, InvalidOperation
 
 from utils.model_loader import discover_models, load_model_from_file
-from utils.parameter_loader import load_model_params, flatten_dict
+from utils.parameter_loader import load_model_params, flatten_dict, get_leaf_defaults
 from utils.section_renderer import render_sections
 from utils.parameter_ui import render_parameters_with_indent, reset_parameters_to_defaults
 from utils.excel_model_runner import (
@@ -24,11 +25,62 @@ with open(os.path.join(base_dir, "config/paths.yaml")) as f:
 
 
 # UI STYLES
-def load_css(file_path: str):
+def load_css(file_path: str) -> None:
+    """Load a CSS file into the Streamlit app if it exists."""
     if os.path.exists(file_path):
-        with open(file_path) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        with open(file_path, encoding="utf-8") as file:
+            st.markdown(f"<style>{file.read()}</style>", unsafe_allow_html=True)
 
+
+def normalize_yaml_defaults(raw_yaml: object) -> dict:
+    """Normalize supported YAML layouts into a flat parameter dictionary."""
+    if not isinstance(raw_yaml, dict):
+        return {}
+
+    parameter_block = raw_yaml.get("parameters", raw_yaml)
+    if not isinstance(parameter_block, dict):
+        return {}
+
+    return flatten_dict(parameter_block)
+
+
+def running_in_stlite() -> bool:
+    """Return True when the app is running inside stlite/Pyodide."""
+    return os.path.abspath(__file__).startswith("/home/pyodide/")
+
+
+def coerce_like_default(value: object, default: object) -> object:
+    """Coerce a widget value to the type implied by its default."""
+    if value in ("", None):
+        return default
+
+    if isinstance(default, Decimal):
+        try:
+            return Decimal(str(value).replace(",", "").strip())
+        except (InvalidOperation, ValueError):
+            return default
+
+    if isinstance(default, int) and not isinstance(default, bool):
+        try:
+            return int(float(str(value).replace(",", "").strip()))
+        except ValueError:
+            return default
+
+    if isinstance(default, float):
+        try:
+            return float(str(value).replace(",", "").strip())
+        except ValueError:
+            return default
+
+    return value
+
+
+def normalize_stlite_params(params: dict, defaults: dict) -> dict:
+    """Restore blank stlite values and coerce numeric strings before model execution."""
+    normalized = dict(params)
+    for key, default in get_leaf_defaults(defaults).items():
+        normalized[key] = coerce_like_default(normalized.get(key), default)
+    return normalized
 
 load_css(os.path.join(base_dir, "styles/sidebar.css"))
 
@@ -89,46 +141,39 @@ if selected_model_file == "__EXCEL_DRIVEN__":
     uploaded_excel_model = st.sidebar.file_uploader(
         "Upload Excel model file (.xlsx)",
         type=["xlsx"],
-        key="excel_model_uploader"
+        key="excel_model_uploader",
     )
 
     if uploaded_excel_model:
-
-        # reset params if Excel file changes
         if (
-                "excel_active_name" not in st.session_state
-                or st.session_state.excel_active_name != uploaded_excel_model.name
+            "excel_active_name" not in st.session_state
+            or st.session_state.excel_active_name != uploaded_excel_model.name
         ):
             st.session_state.excel_active_name = uploaded_excel_model.name
             st.session_state.params = {}
 
         params = st.session_state.params
 
-        # Load the defaults
         editable_defaults, _ = load_excel_params_defaults_with_computed(
             uploaded_excel_model,
             sheet_name=None,
-            start_row=3
+            start_row=3,
         )
 
-        # Load Headers
+        for key, value in get_leaf_defaults(editable_defaults).items():
+            params.setdefault(key, value)
+
         current_headers = get_scenario_headers(uploaded_excel_model)
 
-
-        # RESET CALLBACK
-        def handle_reset_excel():
-            # 1. Reset Parameters
+        def handle_reset_excel() -> None:
+            """Reset Excel parameters and output labels to defaults."""
             reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_model.name)
-            # 2. Reset Header Labels
             if current_headers:
                 for col_letter, default_text in current_headers.items():
                     st.session_state[f"label_override_{col_letter}"] = default_text
 
-
-        # Display Button with Callback
         st.sidebar.button("Reset Parameters", on_click=handle_reset_excel)
 
-        # Outcome Headers (Column B-E)
         if current_headers:
             with st.sidebar.expander("Output Scenario Headers", expanded=False):
                 st.caption("Rename the output headers (B, C, D, E)")
@@ -137,25 +182,22 @@ if selected_model_file == "__EXCEL_DRIVEN__":
                     default_text = current_headers[col_letter]
                     widget_key = f"label_override_{col_letter}"
 
-                    # Robust Widget Logic
                     if widget_key in st.session_state:
-                        new_text = st.text_input(
-                            f"Column {col_letter} Label",
-                            key=widget_key
-                        )
+                        new_text = st.text_input(f"Column {col_letter} Label", key=widget_key)
                     else:
                         new_text = st.text_input(
                             f"Column {col_letter} Label",
                             value=default_text,
-                            key=widget_key
+                            key=widget_key,
                         )
-                    label_overrides[col_letter] = new_text
+                    label_overrides[col_letter] = (
+                        new_text if str(new_text).strip() else default_text
+                    )
 
-        # Render Main Parameters
         render_parameters_with_indent(
             editable_defaults,
             params,
-            model_id=uploaded_excel_model.name
+            model_id=model_key
         )
 
     else:
@@ -166,22 +208,30 @@ else:
     param_source = st.sidebar.radio(
         "Parameter Source",
         ["Model Default (YAML)", "Excel (.xlsx)", "YAML (.yaml)"],
-        horizontal=True
+        horizontal=True,
     )
 
     uploaded_excel = None
-    uploaded_yaml = None
+    uploaded_yaml_file = None
 
     if param_source == "Excel (.xlsx)":
         uploaded_excel = st.sidebar.file_uploader("Upload Excel parameter file", type=["xlsx"])
     elif param_source == "YAML (.yaml)":
-        uploaded_yaml = st.sidebar.file_uploader("Upload YAML parameter file", type=["yaml", "yml"])
+        uploaded_yaml_file = st.sidebar.file_uploader(
+            "Upload YAML parameter file",
+            type=["yaml", "yml"],
+        )
 
-    # PARAMETER SOURCE RESET LOGIC
+    parameter_file = "Model Default (YAML)"
+    if uploaded_excel is not None:
+        parameter_file = uploaded_excel.name
+    elif uploaded_yaml_file is not None:
+        parameter_file = uploaded_yaml_file.name
+
     param_identity = (
         param_source,
         uploaded_excel.name if uploaded_excel else None,
-        uploaded_yaml.name if uploaded_yaml else None,
+        uploaded_yaml_file.name if uploaded_yaml_file else None,
     )
 
     if "active_param_identity" not in st.session_state:
@@ -193,56 +243,53 @@ else:
 
     params = st.session_state.params
 
-    if param_source == "YAML (.yaml)" and uploaded_yaml:
-        raw = yaml.safe_load(uploaded_yaml) or {}
-        model_defaults = flatten_dict(raw)
+    if param_source == "YAML (.yaml)" and uploaded_yaml_file:
+        raw_yaml = yaml.safe_load(uploaded_yaml_file) or {}
+        model_defaults = normalize_yaml_defaults(raw_yaml)
     else:
         model_defaults = load_model_params(
             selected_model_file,
-            uploaded_excel=uploaded_excel
+            uploaded_excel=uploaded_excel,
         )
 
-    # Load Python Model Module to check for Labels
+    for key, value in get_leaf_defaults(model_defaults).items():
+        params.setdefault(key, value)
+
     model_module = load_model_from_file(selected_model_file)
-    # Check for SCENARIO_LABELS constant in the python file
     current_headers = getattr(model_module, "SCENARIO_LABELS", None)
 
-    if model_defaults:
-        # Define Python Model Reset Callback
-        def handle_reset_python():
-            # 1. Reset Parameters
-            reset_parameters_to_defaults(model_defaults, params, model_key)
-            # 2. Reset Header Labels
-            if current_headers:
-                for key, default_text in current_headers.items():
-                    # We use a unique key format for python models to avoid conflicts
-                    st.session_state[f"py_label_{model_key}_{key}"] = default_text
-
-
-        st.sidebar.button("Reset Parameters", on_click=handle_reset_python)
-
-        # SCENARIO LABELS (PYTHON)
+    def handle_reset_python() -> None:
+        """Reset Python-model parameters and output labels to defaults."""
+        reset_parameters_to_defaults(model_defaults, params, model_key)
         if current_headers:
-            with st.sidebar.expander("Output Scenario Headers", expanded=False):
-                st.caption("Rename the output headers")
+            for key, default_text in current_headers.items():
+                st.session_state[f"py_label_{model_key}_{key}"] = default_text
 
-                for key, default_text in current_headers.items():
-                    widget_key = f"py_label_{model_key}_{key}"
+    st.sidebar.button("Reset Parameters", on_click=handle_reset_python)
 
-                    if widget_key in st.session_state:
-                        new_val = st.text_input(f"Label for '{default_text}'", key=widget_key)
-                    else:
-                        new_val = st.text_input(f"Label for '{default_text}'", value=default_text, key=widget_key)
+    if current_headers:
+        with st.sidebar.expander("Output Scenario Headers", expanded=False):
+            st.caption("Rename the output headers")
 
-                    label_overrides[key] = new_val
+            for key, default_text in current_headers.items():
+                widget_key = f"py_label_{model_key}_{key}"
 
-        render_parameters_with_indent(
-            model_defaults,
-            params,
-            model_id=model_key
-        )
-    else:
-        st.sidebar.info("No default parameters defined for this model.")
+                if widget_key in st.session_state:
+                    new_val = st.text_input(f"Label for '{default_text}'", key=widget_key)
+                else:
+                    new_val = st.text_input(
+                        f"Label for '{default_text}'",
+                        value=default_text,
+                        key=widget_key,
+                    )
+
+                label_overrides[key] = new_val if str(new_val).strip() else default_text
+
+    render_parameters_with_indent(
+        model_defaults,
+        params,
+        model_id=model_key,
+    )
 
 # RUN SIMULATION
 if st.sidebar.button("Run Simulation"):
@@ -263,7 +310,7 @@ if st.sidebar.button("Run Simulation"):
                 filename=uploaded_excel_model.name,
                 params=params,
                 sheet_name=None,
-                label_overrides=label_overrides
+                label_overrides=label_overrides,
             )
 
             st.title(results.get("model_title", "Excel Driven Model"))
@@ -280,12 +327,22 @@ if st.sidebar.button("Run Simulation"):
             st.title(getattr(model_module, "model_title", app_config["title"]))
             st.write(getattr(model_module, "model_description", app_config["description"]))
 
+            run_params = (
+                normalize_stlite_params(params, model_defaults)
+                if running_in_stlite()
+                else params
+            )
+
             # Check if run_model accepts label_overrides
             sig = inspect.signature(model_module.run_model)
             if "label_overrides" in sig.parameters:
-                results = model_module.run_model(params, label_overrides=label_overrides)
+                results = model_module.run_model(run_params, label_overrides=label_overrides)
             else:
-                results = model_module.run_model(params)
+                results = model_module.run_model(run_params)
 
             sections = model_module.build_sections(results)
             render_sections(sections)
+
+def running_in_stlite() -> bool:
+    """Return True when the app is running inside stlite/Pyodide."""
+    return os.path.abspath(__file__).startswith("/home/pyodide/")
