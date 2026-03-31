@@ -7,13 +7,11 @@ from epicc.model.schema import Model
 
 
 def load_model(name: str) -> tuple[Model, Any]:
-    # We're okay to cast here because we know the file exists and Traversable is a supertype of
-    # Path, but mypy doesn't know that.
-    config_path = cast(
-        Path, importlib.resources.files("epicc").joinpath(f"models/{name}.yaml")
-    )
+    # Use a Traversable for opening the resource, and a real Path/str for suffix detection.
+    config_resource = importlib.resources.files("epicc").joinpath(f"models/{name}.yaml")
+    config_name = Path(f"{name}.yaml")
 
-    return read_from_format(config_path, config_path.open("rb"), Model)
+    return read_from_format(config_name, config_resource.open("rb"), Model)
 
 
 __all__ = ["load_model"]
