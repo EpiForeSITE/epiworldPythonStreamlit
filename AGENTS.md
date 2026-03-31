@@ -108,7 +108,7 @@ tests.
 - `load_model_from_file(filepath: str) -> object`
 - `load_model_params(model_file_path: str, uploaded_excel=None) -> dict`
 - `flatten_dict(d, level=0)`
-- `render_parameters_with_indent(param_dict, params, label_overrides) -> None`
+- `render_parameters_with_indent(param_dict, params, model_id) -> None`
 - `reset_parameters_to_defaults(param_dict, params, model_id) -> None`
 - `render_sections(sections) -> None`
 

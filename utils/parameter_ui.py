@@ -1,3 +1,5 @@
+import html
+
 import streamlit as st
 
 
@@ -24,10 +26,11 @@ def render_parameters_with_indent(
         clean_label = label.lstrip("\t")
 
         if value is None:
+            safe_label = html.escape(clean_label)
             st.sidebar.markdown(
                 (
                     f"<div style='margin-left:{indent_level * 1.5}em; "
-                    f"font-weight:600;'>{clean_label}</div>"
+                    f"font-weight:600;'>{safe_label}</div>"
                 ),
                 unsafe_allow_html=True,
             )

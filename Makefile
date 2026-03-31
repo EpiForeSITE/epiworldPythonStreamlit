@@ -1,4 +1,4 @@
-UV := uv
+UV ?= uv
 
 STLITE_VER ?= 0.86.0
 PORT ?= 8000
@@ -33,7 +33,8 @@ install: ## Install Python dependencies with uv
 .PHONY: build-html
 build-html: $(INDEX_HTML) ## Generate build/index.html (stlite WASM entry point)
 
-$(INDEX_HTML): $(STLITE_INPUTS) | $(BUILD_DIR)
+$(INDEX_HTML): $(STLITE_INPUTS)
+	@mkdir -p $(BUILD_DIR)
 	@echo "Generating $(INDEX_HTML) (stlite v$(STLITE_VER))"
 	$(UV) run python scripts/build_index.py \
 	--app $(APP_PY) \
@@ -42,13 +43,10 @@ $(INDEX_HTML): $(STLITE_INPUTS) | $(BUILD_DIR)
 	--js $(STLITE_JS) \
 	--title "EpiCON Cost Calculator"
 	@echo "Copying static assets into $(BUILD_DIR)/"
-	@for dir in utils config styles models smelected examples; do \
+	@for dir in utils config styles models selected examples; do \
 	if [ -d "$$dir" ]; then cp -r "$$dir" "$(BUILD_DIR)/$$dir"; fi; \
 	done
 	@echo "Build artefacts written to $(BUILD_DIR)/"
-
-$(BUILD_DIR):
-	mkdir -p $@
 
 .PHONY: dev
 dev: ## Run normal Streamlit locally

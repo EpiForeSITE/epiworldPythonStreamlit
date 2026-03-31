@@ -1,4 +1,5 @@
 import os
+import sys
 import yaml
 import streamlit as st
 import inspect
@@ -46,7 +47,7 @@ def normalize_yaml_defaults(raw_yaml: object) -> dict:
 
 def running_in_stlite() -> bool:
     """Return True when the app is running inside stlite/Pyodide."""
-    return os.path.abspath(__file__).startswith("/home/pyodide/")
+    return sys.platform == "emscripten" or "pyodide" in sys.modules
 
 
 def coerce_like_default(value: object, default: object) -> object:
@@ -167,7 +168,7 @@ if selected_model_file == "__EXCEL_DRIVEN__":
 
         def handle_reset_excel() -> None:
             """Reset Excel parameters and output labels to defaults."""
-            reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_model.name)
+            reset_parameters_to_defaults(editable_defaults, params, model_key)
             if current_headers:
                 for col_letter, default_text in current_headers.items():
                     st.session_state[f"label_override_{col_letter}"] = default_text
@@ -342,7 +343,3 @@ if st.sidebar.button("Run Simulation"):
 
             sections = model_module.build_sections(results)
             render_sections(sections)
-
-def running_in_stlite() -> bool:
-    """Return True when the app is running inside stlite/Pyodide."""
-    return os.path.abspath(__file__).startswith("/home/pyodide/")

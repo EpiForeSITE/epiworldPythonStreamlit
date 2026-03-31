@@ -113,7 +113,7 @@ def build_html(
 """
 
 
-def main() -> None:
+def main():
     """Generate the stlite index.html file."""
     args = parse_args()
 
