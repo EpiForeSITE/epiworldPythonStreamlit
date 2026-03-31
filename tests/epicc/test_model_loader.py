@@ -1,10 +1,9 @@
 """Tests for epicc.model (load_model)."""
 
-import importlib.resources
 import tempfile
 import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -44,6 +43,7 @@ def valid_model_path():
 # ---------------------------------------------------------------------------
 # load_model: patched to avoid relying on built-in model file format
 # ---------------------------------------------------------------------------
+
 
 def test_load_model_returns_model_and_template(valid_model_path: Path):
     with patch("epicc.model.importlib.resources") as mock_res:
