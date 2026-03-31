@@ -11,6 +11,15 @@ from epicc.utils.excel_model_runner import (
     load_excel_params_defaults_with_computed,
     run_excel_driven_model,
 )
+from epicc.utils.export import (
+    clear_export_state,
+    get_results_payload,
+    has_results,
+    initialize_export_state,
+    render_export_button,
+    set_results_payload,
+    trigger_print_if_requested,
+)
 from epicc.utils.model_loader import get_built_in_models
 from epicc.utils.parameter_loader import load_model_params
 from epicc.utils.parameter_ui import (
@@ -31,11 +40,20 @@ def _sync_active_model(model_key: str) -> dict[str, Any]:
     if active_model_key != model_key:
         st.session_state.active_model_key = model_key
         st.session_state.params = {}
+        clear_export_state()
 
     if "params" not in st.session_state:
         st.session_state.params = {}
 
     return st.session_state.params
+
+
+def _render_results_panel(results_payload: dict[str, Any]) -> None:
+    st.markdown('<div class="results-panel">', unsafe_allow_html=True)
+    st.title(results_payload.get("title", CONFIG.app.title))
+    st.write(results_payload.get("description", ""))
+    render_sections(results_payload.get("sections", []))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_excel_parameter_inputs(
@@ -54,6 +72,7 @@ def _render_excel_parameter_inputs(
     if st.session_state.get("excel_active_name") != uploaded_excel_name:
         st.session_state.excel_active_name = uploaded_excel_name
         st.session_state.params = {}
+        clear_export_state()
         params = st.session_state.params
 
     editable_defaults, _ = load_excel_params_defaults_with_computed(
@@ -113,6 +132,7 @@ def _render_python_parameter_inputs(
     if st.session_state.get("active_param_identity") != param_identity:
         st.session_state.active_param_identity = param_identity
         st.session_state.params = {}
+        clear_export_state()
         params = st.session_state.params
 
     model_defaults = load_model_params(
@@ -161,11 +181,11 @@ def _render_python_parameter_inputs(
 
 def _run_excel_simulation(
     params: dict[str, Any], label_overrides: dict[str, str]
-) -> None:
+) -> dict[str, Any] | None:
     uploaded_excel_model = st.session_state.get("excel_model_uploader")
     if not uploaded_excel_model:
         st.error("Please upload an Excel model file first.")
-        st.stop()
+        return None
 
     with st.spinner(f"Running Excel-driven model: {uploaded_excel_model.name}..."):
         results = run_excel_driven_model(
@@ -175,9 +195,11 @@ def _run_excel_simulation(
             sheet_name=None,
             label_overrides=label_overrides,
         )
-        st.title(results.get("model_title", "Excel Driven Model"))
-        st.write(results.get("model_description", ""))
-        render_sections(results["sections"])
+        return {
+            "title": results.get("model_title", "Excel Driven Model"),
+            "description": results.get("model_description", ""),
+            "sections": results.get("sections", []),
+        }
 
 
 def _run_python_simulation(
@@ -185,12 +207,14 @@ def _run_python_simulation(
     model: BaseSimulationModel,
     params: dict[str, Any],
     label_overrides: dict[str, str],
-) -> None:
+) -> dict[str, Any]:
     with st.spinner(f"Running {selected_label}..."):
-        st.title(model.model_title or CONFIG.app.title)
-        st.write(model.model_description or CONFIG.app.description)
         results = model.run(params, label_overrides=label_overrides)
-        render_sections(model.build_sections(results))
+        return {
+            "title": model.model_title or CONFIG.app.title,
+            "description": model.model_description or CONFIG.app.description,
+            "sections": model.build_sections(results),
+        }
 
 
 _load_styles()
@@ -208,6 +232,7 @@ is_excel_model = selected_label == "Excel Driven Model"
 model_key = selected_label
 
 params = _sync_active_model(model_key)
+initialize_export_state()
 
 st.sidebar.subheader("Input Parameters")
 
@@ -220,13 +245,29 @@ else:
         params,
     )
 
-if not st.sidebar.button("Run Simulation"):
-    st.stop()
+run_clicked = st.sidebar.button("Run Simulation")
+had_results_before_run = has_results()
+render_export_button()
 
-if is_excel_model:
-    _run_excel_simulation(params, label_overrides)
-    st.stop()
+if run_clicked:
+    if is_excel_model:
+        set_results_payload(_run_excel_simulation(params, label_overrides))
+    else:
+        set_results_payload(
+            _run_python_simulation(
+                selected_label,
+                model_registry[selected_label],
+                params,
+                label_overrides,
+            )
+        )
+    has_results_after_run = has_results()
+    if has_results_after_run != had_results_before_run:
+        st.rerun()
 
-_run_python_simulation(
-    selected_label, model_registry[selected_label], params, label_overrides
-)
+results_payload = get_results_payload()
+
+if results_payload:
+    _render_results_panel(results_payload)
+
+trigger_print_if_requested()
