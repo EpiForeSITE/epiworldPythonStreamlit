@@ -7,11 +7,15 @@ permissions:
   contents: read
   packages: read
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: epiforesite/epiworldpythonstreamlit
+
 jobs:
   copilot:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/${{ github.repository }}:latest
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
