@@ -4,10 +4,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: epiforesite/epiworldpythonstreamlit
-
 permissions:
   contents: read
   packages: read
@@ -16,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      image: ghcr.io/epiforesite/epiworldpythonstreamlit:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
