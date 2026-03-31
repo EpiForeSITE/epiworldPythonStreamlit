@@ -17,6 +17,7 @@ from epicc.utils.excel_model_runner import (
 from epicc.utils.model_loader import get_built_in_models
 from epicc.utils.parameter_loader import load_model_params
 from epicc.utils.parameter_ui import (
+    item_level,
     render_parameters_with_indent,
     reset_parameters_to_defaults,
 )
@@ -192,16 +193,12 @@ def _render_python_parameter_inputs(
     return params, label_overrides, model_defaults, False
 
 
-def _item_level(key: str) -> int:
-    return len(key) - len(key.lstrip("\t"))
-
-
 def _unflatten_indented_params(flat_params: dict[str, Any]) -> dict[str, Any]:
     root: dict[str, Any] = {}
     stack: list[dict[str, Any]] = [root]
 
     for raw_key, value in flat_params.items():
-        level = _item_level(raw_key)
+        level = item_level(raw_key)
         label = raw_key.strip()
 
         while len(stack) > level + 1:
