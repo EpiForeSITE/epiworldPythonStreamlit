@@ -1,5 +1,5 @@
 """
-Generic reader for YAML parameter files. Excepts a YAML file with a mapping at the top level, which
+Generic reader for YAML parameter files. Expects a YAML file with a mapping at the top level, which
 is parsed into a dictionary.
 """
 
