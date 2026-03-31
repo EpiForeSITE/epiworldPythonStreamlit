@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
 
       - name: Sync dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --group dev --no-install-project
 
       - name: Install development dependencies and tools
         run: |
