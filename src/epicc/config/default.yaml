@@ -1,0 +1,7 @@
+app:
+  title: TB Isolation Cost Calculator
+  description: Streamlit-based simulation tool for tuberculosis (TB) isolation scenarios.
+
+defaults:
+  decimal_precision: 4
+  ui_theme: light
