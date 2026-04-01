@@ -1,37 +1,37 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class Author(BaseModel):
     name: str
-    email: Optional[str] = None
+    email: str | None = None
 
 
 class Metadata(BaseModel):
     title: str
     description: str
     authors: list[Author] = Field(default_factory=list)
-    introduction: Optional[str] = None
+    introduction: str | None = None
 
 
 class Parameter(BaseModel):
     type: Literal["integer", "number", "string", "boolean"]
     label: str
-    description: Optional[str] = None
+    description: str | None = None
     default: int | float | str | bool
-    min: Optional[int | float] = None
-    max: Optional[int | float] = None
-    unit: Optional[str] = None
+    min: int | float | None = None
+    max: int | float | None = None
+    unit: str | None = None
     references: list[str] = Field(default_factory=list)
 
 
 class Equation(BaseModel):
     label: str
-    unit: Optional[str] = None
-    output: Optional[Literal["integer", "number"]] = None
+    unit: str | None = None
+    output: Literal["integer", "number"] | None = None
     compute: str = Field(
         ...,
         description="Python-evaluable expression referencing parameter/scenario variable names.",
@@ -51,7 +51,7 @@ class Scenario(BaseModel):
 class TableRow(BaseModel):
     label: str
     value: str = Field(..., description="Key into the equations dict.")
-    emphasis: Optional[Literal["strong", "em"]] = None
+    emphasis: Literal["strong", "em"] | None = None
 
 
 class Table(BaseModel):
@@ -61,8 +61,8 @@ class Table(BaseModel):
 
 class Figure(BaseModel):
     title: str
-    alt_text: Optional[str] = Field(None, alias="alt-text")
-    py_code: Optional[str] = Field(None, alias="py-code")
+    alt_text: str | None = Field(None, alias="alt-text")
+    py_code: str | None = Field(None, alias="py-code")
 
     model_config = {"populate_by_name": True}
 

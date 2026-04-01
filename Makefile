@@ -39,15 +39,15 @@ stlite: setup serve ## Install, build, and serve the stlite app
 
 .PHONY: lint
 lint: ## Run ruff linter
-	$(UV) tool run ruff check $(SOURCE)
+	$(UV) run -m ruff check $(SOURCE)
 
 .PHONY: typecheck
 typecheck: ## Run mypy type checker
-	$(UV) tool run mypy $(SOURCE)
+	$(UV) run -m mypy --check-untyped-defs $(SOURCE)
 
 .PHONY: test
 test: ## Run pytest
-	$(UV) tool run pytest
+	$(UV) run -m pytest 
 
 .PHONY: check
 check: lint typecheck test ## Run all quality checks

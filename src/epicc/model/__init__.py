@@ -1,6 +1,6 @@
 import importlib.resources
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from epicc.formats import read_from_format
 from epicc.model.schema import Model
