@@ -78,4 +78,5 @@ def load_model_params(model_file_path: str, uploaded_excel=None) -> dict[str, An
     if not isinstance(raw, dict):
         return {}
 
-    return flatten_dict(raw)
+    flat = flatten_dict(raw)
+    return get_leaf_defaults(flat)

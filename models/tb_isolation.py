@@ -14,7 +14,16 @@ SCENARIO_LABELS = {
 }
 
 
-def run_model(params: dict, label_overrides: dict = None):
+def run_model(params: dict, label_overrides: dict | None = None) -> list[dict]:
+    """Run TB isolation model and return results as list of dicts per AGENTS.md.
+    
+    Args:
+        params: Dictionary of model parameters from YAML/Excel.
+        label_overrides: Optional scenario label overrides.
+        
+    Returns:
+        list[dict]: List of result dictionaries with 'type' and 'data' keys.
+    """
     getcontext().prec = 28
     ONE = Decimal("1")
     CENT = Decimal("0.01")
@@ -40,17 +49,17 @@ def run_model(params: dict, label_overrides: dict = None):
         return x.quantize(CENT, rounding=ROUND_HALF_EVEN)
 
     def getp(default, *names) -> Decimal:
+        """Get parameter from params dict, case-insensitive, with fallback."""
         normalized_params = {k.lower(): v for k, v in params.items()}
 
         for n in names:
             n_lower = n.lower()
 
             if n_lower in normalized_params and normalized_params[n_lower] != "":
-                return Decimal(str(normalized_params[n_lower]))
-
-            for key, val in normalized_params.items():
-                if f"({n_lower})" in key and val != "":
-                    return Decimal(str(val))
+                try:
+                    return Decimal(str(normalized_params[n_lower]))
+                except (ValueError, TypeError):
+                    pass
         return Decimal(str(default))
 
     # parameter extraction
@@ -60,25 +69,25 @@ def run_model(params: dict, label_overrides: dict = None):
     workday_ratio = getp(0.714, "Ratio of workdays to total days")
 
     # probabilities of progression
-    prob_latent_to_active_2yr = getp(0, "prob_latent_to_active_2yr", "First 2 years")
-    prob_latent_to_active_lifetime = getp(0, "prob_latent_to_active_lifetime", "Rest of lifetime")
+    prob_latent_to_active_2yr = getp(0.05, "First 2 years (prob_latent_to_active_2yr)", "prob_latent_to_active_2yr")
+    prob_latent_to_active_lifetime = getp(0.05, "Rest of lifetime (prob_latent_to_active_lifetime)", "prob_latent_to_active_lifetime")
 
-    # secondary infection costs
-    cost_latent = getp(0, "cost_latent", "Cost of latent TB infection")
-    cost_active = getp(0, "cost_active", "Cost of active TB infection")
+    # secondary infection costs - FIXED: match YAML key names with proper defaults
+    cost_latent = getp(300, "Cost of latent TB infection (cost_latent)", "cost_latent")
+    cost_active = getp(34523, "Cost of active TB infection (cost_active)", "cost_active")
 
     # isolation scenario parameters
-    isolation_type = int(getp(3, "isolation_type", "Isolation type (1=hospital,2=motel,3=home)"))
-    daily_hosp_cost = getp(0, "isolation_cost", "Daily isolation cost")
-    direct_med_cost_day = getp(0, "Direct medical cost of a day of isolation")  # Often used for hospital stay
+    isolation_type = int(getp(3, "Isolation type (1=hospital,2=motel,3=home)", "isolation_type"))
+    daily_hosp_cost = getp(85, "Daily isolation cost (isolation_cost)", "isolation_cost")
+    direct_med_cost_day = getp(3996, "Direct medical cost of a day of isolation")
 
-    cost_motel_room = getp(0, "Cost of motel room per day")
-    hourly_wage_nurse = getp(0, "Hourly wage for nurse")
-    time_nurse_checkin = getp(0, "Time for nurse to check in w/ pt in motel or home (hrs)")
-    hourly_wage_worker = getp(0, "Hourly wage for worker")
+    cost_motel_room = getp(150, "Cost of motel room per day")
+    hourly_wage_nurse = getp(42.42, "Hourly wage for nurse")
+    time_nurse_checkin = getp(2, "Time for nurse to check in w/ pt in motel or home (hrs)")
+    hourly_wage_worker = getp(29.36, "Hourly wage for worker")
 
-    discount_rate = getp(0, "discount_rate", "Discount rate")
-    remaining_years = int(getp(40, "remaining_years", "Remaining years of life"))
+    discount_rate = getp(0.03, "Discount rate")
+    remaining_years = int(getp(40, "Remaining years of life"))
 
     # determine daily isolation cost based on isolation type
     if isolation_type == 1:
@@ -147,14 +156,33 @@ def run_model(params: dict, label_overrides: dict = None):
         lbl_5: [direct_cost_5_day, productivity_loss_5_day, secondary_cost_5_day, total_5_day],
     })
 
-    return {
-        "df_infections": df_infections,
-        "df_costs": df_costs,
-    }
-
-
-def build_sections(results):
+    # Return list[dict] per AGENTS.md function contract
     return [
-        {"title": "Number of Secondary Infections", "content": [results["df_infections"]]},
-        {"title": "Costs", "content": [results["df_costs"]]},
+        {"type": "infections", "data": df_infections},
+        {"type": "costs", "data": df_costs},
     ]
+
+
+def build_sections(results: list[dict], label_overrides: dict | None = None) -> list[dict]:
+    """Build sections from model results per AGENTS.md.
+    
+    Args:
+        results: List of result dicts from run_model().
+        label_overrides: Optional label overrides (unused but present for compatibility).
+        
+    Returns:
+        list[dict]: List of section dicts for render_sections().
+    """
+    sections = []
+    for item in results:
+        if item["type"] == "infections":
+            sections.append({
+                "title": "Number of Secondary Infections",
+                "content": [item["data"]]
+            })
+        elif item["type"] == "costs":
+            sections.append({
+                "title": "Costs",
+                "content": [item["data"]]
+            })
+    return sections

@@ -1,4 +1,5 @@
 import streamlit as st
+import html
 
 
 def reset_parameters_to_defaults(
@@ -21,7 +22,7 @@ def render_parameters_with_indent(
     """Render parameter inputs without overwriting defaults with blank values."""
     for label, value in param_dict.items():
         indent_level = len(label) - len(label.lstrip("\t"))
-        clean_label = label.lstrip("\t")
+        clean_label = html.escape(label.lstrip("\t"))
 
         if value is None:
             st.sidebar.markdown(

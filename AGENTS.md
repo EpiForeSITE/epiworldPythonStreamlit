@@ -108,16 +108,16 @@ tests.
 - `load_model_from_file(filepath: str) -> object`
 - `load_model_params(model_file_path: str, uploaded_excel=None) -> dict`
 - `flatten_dict(d, level=0)`
-- `render_parameters_with_indent(param_dict, params, label_overrides) -> None`
-- `reset_parameters_to_defaults(param_dict, params, model_id) -> None`
-- `render_sections(sections) -> None`
+- `render_parameters_with_indent(param_dict: dict, params: dict, model_id: str) -> None`
+- `reset_parameters_to_defaults(param_dict: dict, params: dict, model_id: str) -> None`
+- `render_sections(sections: list[dict]) -> None`
 
 ### Python model modules
 Each Python model module in `models/` must expose:
 - `model_title: str`
 - `model_description: str`
 - `run_model(params: dict, label_overrides: dict | None = None) -> list[dict]`
-- `build_sections(results: list[dict]) -> list[dict]`
+- `build_sections(results: list[dict], label_overrides: dict | None = None) -> list[dict]`
 
 ---
 

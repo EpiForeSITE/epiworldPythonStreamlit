@@ -1,4 +1,4 @@
-UV := uv
+UV ?= uv
 
 STLITE_VER ?= 0.86.0
 PORT ?= 8000
@@ -10,7 +10,9 @@ BUILD_DIR := build
 INDEX_HTML := $(BUILD_DIR)/index.html
 
 STLITE_INPUTS := $(APP_PY) pyproject.toml scripts/build_index.py \
-    $(shell find models utils config styles selected examples -type f 2>/dev/null)
+	$(shell find models utils config styles selected examples -type f 2>/dev/null)
+
+ASSET_DIRS := utils config styles models selected examples
 
 .DEFAULT_GOAL := help
 
@@ -42,8 +44,8 @@ $(INDEX_HTML): $(STLITE_INPUTS) | $(BUILD_DIR)
 	--js $(STLITE_JS) \
 	--title "EpiCON Cost Calculator"
 	@echo "Copying static assets into $(BUILD_DIR)/"
-	@for dir in utils config styles models smelected examples; do \
-	if [ -d "$$dir" ]; then cp -r "$$dir" "$(BUILD_DIR)/$$dir"; fi; \
+	@for dir in $(ASSET_DIRS); do \
+	    if [ -d "$$dir" ]; then cp -r "$$dir" "$(BUILD_DIR)/"; fi; \
 	done
 	@echo "Build artefacts written to $(BUILD_DIR)/"
 

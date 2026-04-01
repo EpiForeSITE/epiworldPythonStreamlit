@@ -530,6 +530,9 @@ def load_excel_params_defaults_with_computed(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
+    
+    if ws is None:
+        return {}, {}
 
     engine = FormulaEngine(ws)
 
@@ -633,6 +636,9 @@ def get_scenario_headers(excel_file, sheet_name: Optional[str] = None) -> Dict[s
     """
     wb = load_workbook(excel_file, data_only=True)
     ws = wb[sheet_name] if sheet_name else wb.active
+    
+    if ws is None:
+        return {}
 
     header_row = _find_outcome_header_row(ws)
 
@@ -651,11 +657,12 @@ def get_scenario_headers(excel_file, sheet_name: Optional[str] = None) -> Dict[s
 
 
 def build_sections_from_excel_outcomes(
-        ws: Worksheet,
-        engine: FormulaEngine,
-        header_row: int,
-        label_overrides: Dict[str, str] = None
-) -> List[dict]:
+    ws: Worksheet,
+    engine,
+    header_row: int,
+    label_overrides: dict[str, str]
+) -> list[dict]:
+    """Build output sections from Excel worksheet outcomes."""
     scenario_cols_all = _scenario_columns_before_F(ws)
     outcome_rows = _iter_outcome_rows(ws, header_row, scenario_cols_all)
     scenario_cols = _detect_active_scenario_columns(ws, header_row, scenario_cols_all, outcome_rows)
@@ -736,7 +743,12 @@ def _cell_display(ws: Worksheet, engine: FormulaEngine, cell_ref: str) -> Any:
     return str(v).strip()
 
 
-def build_sections_from_generic_tables(ws: Worksheet, engine: FormulaEngine) -> List[dict]:
+def build_sections_from_generic_tables(
+    ws: Worksheet,
+    engine: FormulaEngine,
+    label_overrides: dict[str, str]
+) -> list[dict]:
+    """Build output sections from generic Excel tables."""
     max_scan_rows = min(ws.max_row, 250)
     max_scan_cols = _col_to_index("E")
 
@@ -838,10 +850,17 @@ def run_excel_driven_model(
         filename: str,
         params: Dict[str, Any],
         sheet_name: Optional[str] = None,
-        label_overrides: Dict[str, str] = None
+        label_overrides: Optional[dict[str, str]] = None
 ) -> Dict[str, Any]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
+    
+    if ws is None:
+        return {
+            "model_title": "Error",
+            "model_description": "Failed to load worksheet",
+            "sections": [],
+        }
 
     apply_params_to_workbook(ws, params, start_row=3, overwrite_formulas=True)
 
@@ -849,9 +868,9 @@ def run_excel_driven_model(
     header_row = _find_outcome_header_row(ws)
 
     if header_row is not None:
-        sections = build_sections_from_excel_outcomes(ws, engine, header_row, label_overrides)
+        sections = build_sections_from_excel_outcomes(ws, engine, header_row, label_overrides or {})
     else:
-        sections = build_sections_from_generic_tables(ws, engine)
+        sections = build_sections_from_generic_tables(ws, engine, label_overrides or {})
 
     model_name = os.path.splitext(os.path.basename(filename))[0]
 
@@ -860,3 +879,26 @@ def run_excel_driven_model(
         "model_description": "Excel-driven model",
         "sections": sections,
     }
+
+def run_model(
+    ws: Optional[Worksheet],
+    engine,
+    header_row: int,
+    label_overrides: Optional[dict[str, str]] = None
+) -> list[dict]:
+    """Run the Excel-based model with optional label overrides."""
+    if ws is None:
+        return []
+    return build_sections_from_excel_outcomes(ws, engine, header_row, label_overrides or {})
+
+
+def build_sections(
+    ws: Optional[Worksheet],
+    engine,
+    header_row: int,
+    label_overrides: Optional[dict[str, str]] = None
+) -> list[dict]:
+    """Build output sections from model results."""
+    if ws is None:
+        return []
+    return build_sections_from_excel_outcomes(ws, engine, header_row, label_overrides or {})

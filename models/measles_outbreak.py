@@ -15,7 +15,19 @@ SCENARIO_LABELS = {
 }
 
 
-def run_model(params, label_overrides: dict = None):
+def run_model(
+    params: dict,
+    label_overrides: dict | None = None
+) -> list[dict]:
+    """Run measles outbreak model and return results as list of dicts per AGENTS.md.
+    
+    Args:
+        params: Dictionary of model parameters from YAML/Excel.
+        label_overrides: Optional scenario label overrides.
+        
+    Returns:
+        list[dict]: List of result dictionaries with 'type' and 'data' keys.
+    """
     getcontext().prec = 28
     ONE = Decimal("1")
     CENT = Decimal("0.01")
@@ -46,7 +58,7 @@ def run_model(params, label_overrides: dict = None):
             if n in params and params[n] != "":
                 try:
                     return Decimal(str(params[n]))
-                except:
+                except (ValueError, TypeError):
                     pass
         return Decimal(str(default))
 
@@ -114,19 +126,30 @@ def run_model(params, label_overrides: dict = None):
         ]
     })
 
-    return {
-        "df_costs": df_costs
-    }
+    return [
+        {"type": "costs", "data": df_costs},
+    ]
 
 
 # ui
-def build_sections(results):
-    df_costs = results["df_costs"]
-
-    sections = [
-        {
-            "title": "Measles Outbreak Costs",
-            "content": [df_costs]
-        }
-    ]
+def build_sections(
+    results: list[dict],
+    label_overrides: dict | None = None
+) -> list[dict]:
+    """Build sections from model results per AGENTS.md.
+    
+    Args:
+        results: List of result dicts from run_model().
+        label_overrides: Optional label overrides (for compatibility).
+        
+    Returns:
+        list[dict]: List of section dicts for render_sections().
+    """
+    sections = []
+    for item in results:
+        if item["type"] == "costs":
+            sections.append({
+                "title": "Measles Outbreak Costs",
+                "content": [item["data"]]
+            })
     return sections

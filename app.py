@@ -1,4 +1,5 @@
 import os
+import sys
 import yaml
 import streamlit as st
 import inspect
@@ -45,8 +46,13 @@ def normalize_yaml_defaults(raw_yaml: object) -> dict:
 
 
 def running_in_stlite() -> bool:
-    """Return True when the app is running inside stlite/Pyodide."""
-    return os.path.abspath(__file__).startswith("/home/pyodide/")
+    """
+    Return True when the app is running inside stlite/Pyodide.
+    
+    Uses Pyodide's recommended detection method:
+    https://docs.pyodide.org/en/stable/usage/faq.html
+    """
+    return sys.platform == "emscripten" or "pyodide" in sys.modules
 
 
 def coerce_like_default(value: object, default: object) -> object:
@@ -165,9 +171,12 @@ if selected_model_file == "__EXCEL_DRIVEN__":
 
         current_headers = get_scenario_headers(uploaded_excel_model)
 
+        # Use uploaded_excel_model.name as the model_id for consistent widget keys
+        excel_model_id = uploaded_excel_model.name
+
         def handle_reset_excel() -> None:
             """Reset Excel parameters and output labels to defaults."""
-            reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_model.name)
+            reset_parameters_to_defaults(editable_defaults, params, excel_model_id)
             if current_headers:
                 for col_letter, default_text in current_headers.items():
                     st.session_state[f"label_override_{col_letter}"] = default_text
@@ -194,10 +203,11 @@ if selected_model_file == "__EXCEL_DRIVEN__":
                         new_text if str(new_text).strip() else default_text
                     )
 
+        # Use excel_model_id (filename) for widget key consistency
         render_parameters_with_indent(
             editable_defaults,
             params,
-            model_id=model_key
+            model_id=excel_model_id
         )
 
     else:
@@ -340,9 +350,6 @@ if st.sidebar.button("Run Simulation"):
             else:
                 results = model_module.run_model(run_params)
 
-            sections = model_module.build_sections(results)
+            # results is now list[dict] per AGENTS.md contract
+            sections = model_module.build_sections(results, label_overrides=label_overrides)
             render_sections(sections)
-
-def running_in_stlite() -> bool:
-    """Return True when the app is running inside stlite/Pyodide."""
-    return os.path.abspath(__file__).startswith("/home/pyodide/")

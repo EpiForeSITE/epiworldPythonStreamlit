@@ -1,3 +1,25 @@
 .venv/
 __pycache__/
 *.py[cod]
+# Build artifacts
+build/
+.coverage
+*.bak
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+.venv/
+.env
+# Build artifacts
+build/
+.coverage
+*.bak
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+.venv/
+.env
