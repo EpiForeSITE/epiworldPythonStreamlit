@@ -40,3 +40,21 @@ def test_write_round_trips():
     result = _fmt().write(original)
     data, _ = _fmt().read(BytesIO(result))
     assert data == original
+
+
+def test_write_with_template_preserves_comments():
+    source = """# top comment
+costs:
+  # latent comment
+  latent: 300
+  active: 500
+"""
+    data, template = _fmt().read(_stream(source))
+    data["costs"]["latent"] = 123
+
+    result = _fmt().write(data, template)
+    text = result.decode("utf-8")
+
+    assert "# top comment" in text
+    assert "# latent comment" in text
+    assert "latent: 123" in text

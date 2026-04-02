@@ -1,7 +1,7 @@
 """Integration tests for epicc.formats.template (generate_template)."""
 
 from io import BytesIO
-from typing import Literal, Optional
+from typing import Literal
 
 import openpyxl
 from pydantic import BaseModel, Field
@@ -10,10 +10,10 @@ from epicc.formats.template import generate_template
 from epicc.formats.xlsx import XLSXFormat
 from epicc.formats.yaml import YAMLFormat
 
-
 # ---------------------------------------------------------------------------
 # Test models
 # ---------------------------------------------------------------------------
+
 
 class _Inner(BaseModel):
     rate: float
@@ -25,12 +25,13 @@ class _Outer(BaseModel):
     count: int = 5
     inner: _Inner
     theme: Literal["light", "dark"] = "light"
-    note: Optional[str] = None
+    note: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # YAML
 # ---------------------------------------------------------------------------
+
 
 def test_yaml_template_contains_defaults():
     result = generate_template(_Outer, YAMLFormat("template.yaml"))
@@ -61,11 +62,14 @@ def test_yaml_template_placeholder_for_required_fields():
 # XLSX
 # ---------------------------------------------------------------------------
 
+
 def _read_xlsx_rows(data: bytes) -> dict[str, tuple]:
     """Parse an XLSX template into {key: (value, description)}."""
     wb = openpyxl.load_workbook(BytesIO(data))
+    assert wb.active
+
     rows = list(wb.active.iter_rows(values_only=True))
-    return {r[0]: (r[1], r[2]) for r in rows[1:] if r[0] is not None}
+    return {str(r[0]): (r[1], r[2]) for r in rows[1:] if r[0] is not None}
 
 
 def test_xlsx_template_flattens_nested():

@@ -5,20 +5,16 @@ TODO: A lot of of this stuff is very restrictive, since the calculator was initi
 """
 
 import importlib.resources
-from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from epicc.config.schema import Config
 from epicc.formats import read_from_format
 
 
 def load_config(name: str) -> tuple[Config, Any]:
-    # We're okay to cast here because we know the file exists and Traversable is a supertype of
-    # Path, but mypy doesn't know that.
-    config_path = cast(
-        Path, importlib.resources.files("epicc").joinpath(f"config/{name}.yaml")
-    )
-    return read_from_format(config_path, config_path.open("rb"), Config)
+    resource = importlib.resources.files("epicc").joinpath(f"config/{name}.yaml")
+    filename = f"config/{name}.yaml"
+    return read_from_format(filename, resource.open("rb"), Config)
 
 
 CONFIG, _ = load_config("default")

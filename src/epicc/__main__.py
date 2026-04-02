@@ -217,8 +217,15 @@ def _run_python_simulation(
         }
 
 
+st.set_page_config(
+    page_title="EpiCON Cost Calculator",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 _load_styles()
 
+st.sidebar.title("EpiCON Cost Calculator")
 st.sidebar.header("Simulation Controls")
 
 built_in_models = get_built_in_models()

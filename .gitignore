@@ -1,9 +1,11 @@
+*.egg-info/
+__pycache__/
+.*_cache/
 .venv/
 .vscode/
-__pycache__/
-*.py[cod]
-*.egg-info/
-.DS_Store
 dist/
-build/
+*.py[cod]
+.DS_Store
 *.egg
+.coverage
+*.bak
