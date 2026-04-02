@@ -1,0 +1,17 @@
+import importlib.resources
+from pathlib import Path
+from typing import Any
+
+from epicc.formats import read_from_format
+from epicc.model.schema import Model
+
+
+def load_model(name: str) -> tuple[Model, Any]:
+    # Use a Traversable for opening the resource, and a real Path/str for suffix detection.
+    config_resource = importlib.resources.files("epicc").joinpath(f"models/{name}.yaml")
+    config_name = Path(f"{name}.yaml")
+
+    return read_from_format(config_name, config_resource.open("rb"), Model)
+
+
+__all__ = ["load_model"]

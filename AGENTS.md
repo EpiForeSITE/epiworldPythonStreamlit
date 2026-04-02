@@ -33,189 +33,208 @@ Persistence helpers:
 
 ---
 
+## Architecture notes
+
+Use this section to reason about where changes belong and what contracts must remain stable.
+
+### Runtime layers
+
+1. **UI composition layer** (`src/epicc/__main__.py`)
+    - Owns Streamlit controls, session-state synchronization, run triggers, and wiring for model selection.
+    - Delegates rendering and IO behavior to helpers in `src/epicc/utils/`.
+2. **Model execution layer** (`src/epicc/model/`, `src/epicc/models/`, `models/`)
+    - `BaseSimulationModel` defines the contract for Python-coded models.
+    - Built-in model classes in `src/epicc/models/` implement `run()`, defaults, scenario labels, and section construction.
+3. **Format/validation layer** (`src/epicc/formats/`, `src/epicc/model/schema.py`)
+    - Parses YAML/XLSX input into a shared dictionary shape.
+    - Applies typed validation via Pydantic where a strict schema is required.
+
+### Pydantic model system
+
+- `src/epicc/model/schema.py` defines the canonical typed schema for structured model documents:
+   - `Model` (root object),
+   - `Metadata`, `Parameter`, `Equation`, `Table`, `Scenario`, and `Figure` submodels.
+- This schema is the primary contract for validating model-like YAML payloads and should be updated in lockstep with any document-structure changes.
+- `src/epicc/formats/__init__.py` exposes `opaque_to_typed()` and `read_from_format()` to bridge:
+   - untyped dictionaries from parsers, and
+   - typed Pydantic objects used by callers.
+- `src/epicc/utils/parameter_loader.py` uses a lightweight `RootModel[dict[str, Any]]` envelope (`OpaqueParameters`) when only shape-preserving parse/validation is needed, without imposing the full simulation-document schema.
+
+### `epicc.formats` package design
+
+- `src/epicc/formats/base.py` defines `BaseFormat[T]` with three responsibilities:
+   - `read()` for parse to opaque dict + template,
+   - `write()` for serialize from opaque dict (optionally preserving template trivia),
+   - `write_template()` for schema-driven starter files.
+- `src/epicc/formats/__init__.py` performs suffix-based dispatch (`.yaml`, `.yml`, `.xlsx`) through `get_format()`.
+- `src/epicc/formats/yaml.py` uses ruamel round-trip nodes (`CommentedMap`) so edits can preserve comments/formatting when writing back.
+- `src/epicc/formats/xlsx.py` maps worksheet rows to dot-notation keys for nested dictionaries and reuses workbook templates when possible.
+- `src/epicc/formats/template.py` builds model templates from Pydantic defaults/placeholders and delegates rendering to the target format backend.
+
+### Architectural guardrails for contributors
+
+- Prefer adding format support through a new `BaseFormat` implementation and `_FORMATS` registration, rather than branching logic in UI code.
+- Keep Streamlit concerns in `__main__.py`/`utils` and keep schema/serialization concerns in `model` + `formats`.
+- If a change affects model document structure, update all of:
+   - Pydantic schema (`src/epicc/model/schema.py`),
+   - relevant format reader/writer behavior,
+   - tests under `tests/epicc/`.
+- Preserve backward compatibility for existing model YAML and Excel templates unless breaking changes are explicitly approved.
+
+---
+
 ## Repository layout
 
-```text
-epiworldPythonStreamlit/
-├── app.py
-├── models/                 # Python model modules + paired YAML parameter files
-├── utils/
-│   ├── model_loader.py
-│   ├── parameter_loader.py
-│   ├── parameter_ui.py
-│   ├── excel_model_runner.py
-│   └── section_renderer.py
-├── config/
-├── styles/
-├── scripts/                # stlite build helpers
-├── build/                  # generated static output
-├── docs/
-├── pyproject.toml
-├── Makefile
-├── AGENTS.md
-└── README.md
-```
+Top-level files and directories you will use most often:
+
+- `app.py`:
+   - Root Streamlit shim that adds `src/` to `PYTHONPATH` and imports `epicc.__main__`.
+- `src/epicc/__main__.py`:
+   - Main app composition and UI flow (model selector, parameter widgets, run triggers).
+- `src/epicc/model/`:
+   - Core model abstractions and schema definitions (`base.py`, `schema.py`).
+- `src/epicc/formats/`:
+   - Parameter format readers/writers (`yaml.py`, `xlsx.py`, templates).
+- `src/epicc/utils/`:
+   - App support modules (`model_loader.py`, `parameter_loader.py`, `parameter_ui.py`, `section_renderer.py`, `excel_model_runner.py`).
+- `models/`:
+   - Built-in model implementations and matching parameter defaults.
+- `config/`:
+   - App configuration (`app.yaml`, `global_defaults.yaml`, `paths.yaml`).
+- `styles/` and `src/epicc/web/`:
+   - UI styling resources.
+- `tests/epicc/`:
+   - Unit tests for formats and model loading.
+- `.devcontainer/`:
+   - Development container setup. `post-create.sh` is the source of truth for extra setup steps.
+- `.github/workflows/`:
+   - CI and agent workflow definitions.
+
+---
+
+## Local development commands
+
+Use `uv` for dependency and command execution.
+
+- Install dependencies:
+   - `uv sync`
+- Run Streamlit app:
+   - `uv run -m streamlit run app.py`
+- Run complete quality gate (recommended before PR):
+   - `make check`
+- Individual checks:
+   - `make lint`
+   - `make typecheck`
+   - `make test`
+- Build static stlite bundle:
+   - `make build`
+- Serve static bundle locally:
+   - `make serve`
+
+If you are in a devcontainer or CI environment intended to mirror local contributor setup,
+ensure development dependencies are present:
+
+- `uv sync --frozen --group dev --no-install-project`
 
 ---
 
 ## Coding conventions
 
-All agent-generated code must follow these standards.
-
-### Style
-- Follow **PEP 8** for all Python code.
-- Use **type hints** on every function signature.
-- Write **docstrings** for every public function and class.
-- Maximum line length: **100 characters**.
-
-### Testing
-- Tests use **pytest** only.
-- Add or update pytest coverage for every changed public function whenever a `tests/` target
-  exists for that module.
-- Prefer pure-Python tests compatible with the stlite/Pyodide target.
-- Avoid test dependencies that require native binaries.
-- Aim for at least **80% line coverage** on new code where CI coverage is enforced.
-
-### Dependencies
-- Add dependencies via `pyproject.toml` only, managed by `uv`.
-- Runtime dependencies must be **pure-Python** or available as **Pyodide wheels**.
-- Dev-only dependencies are exempt from the Pyodide runtime constraint.
-
-### Security
-- Equations and figure code in YAML files are untrusted input.
-- Validate them with the CPython `ast` module before evaluation.
-- Never use `eval()` or `exec()` on unvalidated user-supplied strings.
-- Do not log or print parameter values that could contain PII.
-
-### Git workflow
-- **No direct pushes to `main`.**
-- Use branch names like:
-  - `feat/<short-description>`
-  - `fix/<short-description>`
-  - `chore/<short-description>`
-- Use **Conventional Commits** for commit messages.
-- Each PR should address a single concern.
+- Keep changes minimal and targeted to the requested behavior.
+- Preserve existing module boundaries under `src/epicc/`:
+   - model logic in model modules,
+   - format parsing/serialization in `formats`,
+   - Streamlit rendering concerns in `utils`/`__main__.py`.
+- Prefer explicit typing for new public functions and non-trivial internal helpers.
+- Follow current style used in the repository:
+   - straightforward function names,
+   - small helpers for Streamlit state/UI behavior,
+   - concise docstrings where useful.
+- Do not introduce broad refactors unless explicitly requested.
 
 ---
 
-## Function contracts (current)
+## Model and parameter rules
 
-Agents must not change a function signature or return type without updating all callers and
-tests.
+When adding or editing Python+YAML models:
 
-### App / utility layer
-- `discover_models(path: str) -> dict[str, str]`
-- `load_model_from_file(filepath: str) -> object`
-- `load_model_params(model_file_path: str, uploaded_excel=None) -> dict`
-- `flatten_dict(d, level=0)`
-- `render_parameters_with_indent(param_dict: dict, params: dict, model_id: str) -> None`
-- `reset_parameters_to_defaults(param_dict: dict, params: dict, model_id: str) -> None`
-- `render_sections(sections: list[dict]) -> None`
+- Keep model pairs aligned:
+   - `models/<name>.py` with `models/<name>.yaml`.
+- Ensure YAML default keys map to parameters expected by model code.
+- Preserve scenario label behavior:
+   - Python models can provide scenario labels,
+   - Excel flow supports header overrides from uploaded workbook columns.
+- If changing parameter structures, validate both:
+   - default-loading behavior,
+   - reset-to-default behavior in sidebar controls.
 
-### Python model modules
-Each Python model module in `models/` must expose:
-- `model_title: str`
-- `model_description: str`
-- `run_model(params: dict, label_overrides: dict | None = None) -> list[dict]`
-- `build_sections(results: list[dict], label_overrides: dict | None = None) -> list[dict]`
+When editing Excel-driven behavior:
 
----
-
-## Agent roles
-
-### Interactive development agents
-**Scope:** Code generation, refactoring, documentation, tests, YAML schema work, and code
-review suggestions.
-
-**Constraints:**
-- Always read `AGENTS.md` and relevant source files before proposing changes.
-- Do not modify `pyproject.toml` dependencies without explaining Pyodide compatibility.
-- Use AST validation for equation evaluation.
-- Prefer Streamlit-native rendering over heavier plotting dependencies.
-- For browser-only persistence, use browser storage patterns rather than server-side files.
-- Propose tests alongside implementation changes.
-
-### GitHub Actions — CI agent
-**Trigger:** Every push and every PR targeting `main`.
-
-**Expected steps:**
-1. Check out the repository.
-2. Install dependencies with `uv`.
-3. Run `ruff`.
-4. Run `mypy`.
-5. Run `pytest` with coverage.
-6. Fail if configured coverage thresholds are not met.
-
-**Constraints:**
-- Must run in the project’s supported development environment.
-- Do not upload artifacts unless explicitly configured.
-
-### GitHub Actions — agent environment
-**Purpose:** Set up credentials, tools, and optional external service tokens.
-
-**Constraints:**
-- Secrets must be stored in GitHub Actions Secrets.
-- Fail loudly if required secrets are missing.
+- Maintain support for uploaded `.xlsx` files in the sidebar.
+- Keep computed outputs and editable defaults behavior intact.
+- Avoid breaking scenario-header override support.
 
 ---
 
-## YAML model schema
+## Testing expectations
 
-The app currently supports both of these YAML layouts.
-
-### 1. Flat key/value defaults
-```yaml
-Cost of measles hospitalization: 31168
-Proportion of cases hospitalized: 0.2
-```
-
-### 2. Nested parameter dictionary
-```yaml
-parameters:
-  Cost of measles hospitalization: 31168
-  Proportion of cases hospitalized: 0.2
-```
-
-Agents must preserve compatibility with both layouts unless the app is explicitly migrated.
-
-### Reference schema for future structured models
-```yaml
-model:
-  metadata:
-  parameters:
-  equations:
-  table:
-  figures:
-  current_parameters:
-```
-
-If generating new structured YAML, keep it compatible with current loaders or update the
-loaders and tests together.
+- Add or update tests when behavior changes.
+- Run `make check` locally before finalizing changes.
+- At minimum for focused fixes, run the most relevant subset:
+   - `uv run -m pytest tests/epicc/<target_test>.py`
+- Keep tests deterministic and file-system safe (use temp files/fixtures).
 
 ---
 
-## Out-of-scope for agents
+## CI and workflow guidance
 
-The following are off-limits without explicit human approval in PR review:
-
-- Changing branch protection rules.
-- Adding `eval()` or `exec()` on user-supplied strings.
-- Introducing runtime dependencies that require native binaries.
-- Modifying the public function signatures listed above.
-- Writing outside the repository working directory.
-- Disabling or skipping CI checks.
+- Workflows that pull container images from GHCR must declare explicit permissions:
+   - `contents: read`
+   - `packages: read`
+- Keep GitHub Actions environment setup aligned with `.devcontainer/post-create.sh`
+   when the workflow's intent is to mirror local contributor/agent environments.
+- Use frozen dependency sync in CI where practical for reproducibility.
 
 ---
 
-## Getting started
+## Agent operating checklist
 
-```bash
-uv sync
-make dev
-make setup
-make serve
-make check
-```
+Before editing:
 
-For architecture questions, refer to the development plan, inline source comments, and current
-utility/model implementations.
+1. Read the relevant modules and tests for the target behavior.
+2. Identify whether the change affects Python-model flow, Excel flow, or both.
+3. Confirm config and schema assumptions.
+
+During editing:
+
+1. Keep patches narrowly scoped.
+2. Preserve user-visible text and layout unless change requires otherwise.
+3. Avoid introducing new dependencies without justification.
+
+Before handoff:
+
+1. Run targeted tests (or `make check` for broader changes).
+2. Summarize exactly what changed and why.
+3. Call out anything not validated.
+
+---
+
+## Common pitfalls
+
+- Breaking session-state reset behavior when switching model/input files.
+- Updating parameter loaders without updating UI/reset paths.
+- Changing schema/format behavior without corresponding tests.
+- Introducing workflow changes that work in permissive repos but fail in restricted
+   `GITHUB_TOKEN` permission settings.
+
+---
+
+## Definition of done
+
+A change is complete when:
+
+1. Requested behavior is implemented.
+2. Existing model flows still run (Python+YAML and Excel-driven, if affected).
+3. Relevant tests pass locally.
+4. Documentation/config/workflow updates needed for the change are included.
+
