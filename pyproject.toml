@@ -7,7 +7,7 @@ dependencies = [
     "pandas>=2.3.0",
     "numpy>=2.4.0",
     "openpyxl>=3.1.0",
-    "pydantic[email]>=2.12.5",
+    "pydantic>=2.12.5",
     "ruamel-yaml>=0.19.1",
 ]
 
@@ -15,7 +15,22 @@ dependencies = [
 dev = [
     "ruff>=0.15.6",
     "pytest>=8.0.0",
+    "mypy>=1.20.0",
+    "types-pyyaml>=6.0.12.20250915",
+    "pandas-stubs>=3.0.0.260204",
+    "types-openpyxl>=3.1.0.20240106",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[tool.mypy]
+mypy_path = "src"
+explicit_package_bases = true
+
+[tool.stlite]
+title = "EpiCON Cost Calculator"
+mount_dirs = ["src"]
+text_suffixes = [".py", ".yaml", ".yml", ".css", ".js", ".html"]
+css_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.css"
+js_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.js"

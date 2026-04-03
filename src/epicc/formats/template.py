@@ -44,7 +44,8 @@ def _resolve(field_info: FieldInfo) -> Any:
         return field_info.default
 
     if field_info.default_factory is not None:
-        return field_info.default_factory()
+        # `default_factory` may be called without arguments, but mypy doesn't know that.
+        return field_info.default_factory()  # type: ignore
 
     return _placeholder(field_info.annotation)
 

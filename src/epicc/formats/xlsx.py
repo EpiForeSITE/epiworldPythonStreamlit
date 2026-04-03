@@ -101,13 +101,14 @@ class XLSXFormat(BaseFormat[Workbook]):
         wb = template or Workbook()
         ws = wb.active
         assert ws is not None, "Workbook must have an active worksheet (bug)."
+        flat_data = _flatten_dict(data)
 
         # Populate with the provided data piecewise.
         for row in ws.iter_rows():
             key_cell = row[_COL_PARAMETER]
             val_cell = row[_COL_VALUE]
-            if key_cell.value in data:
-                val_cell.value = data[key_cell.value]  # type: ignore
+            if key_cell.value in flat_data:
+                val_cell.value = flat_data[key_cell.value]  # type: ignore[index]
 
         # Awful, but openpyxl is only capable of doing it this way.
         output = BytesIO()
@@ -132,9 +133,7 @@ class XLSXFormat(BaseFormat[Workbook]):
         return output.getvalue()
 
 
-def _flatten(
-    model: BaseModel, prefix: str = ""
-) -> list[tuple[str, Any, str]]:
+def _flatten(model: BaseModel, prefix: str = "") -> list[tuple[str, Any, str]]:
     """Recursively flatten a model instance to ``[(dot_key, value, description)]``."""
     rows: list[tuple[str, Any, str]] = []
     for name, field_info in type(model).model_fields.items():
@@ -146,6 +145,18 @@ def _flatten(
         else:
             rows.append((key, value, description))
     return rows
+
+
+def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Flatten nested dict values to dot-notation keys for worksheet lookups."""
+    flattened: dict[str, Any] = {}
+    for key, value in data.items():
+        dot_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            flattened.update(_flatten_dict(value, prefix=dot_key))
+        else:
+            flattened[dot_key] = value
+    return flattened
 
 
 def _set_nested(d: dict, key: str, value: Any) -> None:

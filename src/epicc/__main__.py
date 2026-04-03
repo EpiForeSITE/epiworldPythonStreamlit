@@ -114,9 +114,10 @@ def _render_python_parameter_inputs(
 
     sorted_suffixes = sorted(VALID_PARAMETER_SUFFIXES)
     uploaded_params = st.sidebar.file_uploader(
-        "Optional parameter override file",
+        "Optional parameter file",
         type=sorted_suffixes,
         help="If omitted, model defaults are used.",
+        accept_multiple_files=False,
     )
 
     if uploaded_params:

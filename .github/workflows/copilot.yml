@@ -1,0 +1,42 @@
+name: GitHub Copilot Dev Environment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  copilot:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/epiforesite/epiworldpythonstreamlit:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync dependencies
+        run: uv sync --frozen --group dev --no-install-project
+
+      - name: Install development dependencies and tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            git \
+            vim \
+            nano \
+            curl \
+            wget
+
+      - name: Verify development environment
+        run: |
+          echo "Development environment ready for GitHub Copilot"
+          echo "Python version: $(python --version)"
+          echo "uv version: $(uv --version)"
+          uv pip list

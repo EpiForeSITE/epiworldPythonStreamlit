@@ -1,9 +1,16 @@
+"""
+DEPRECATED, remove as per #26, "Remove XLSX Model Specification Code"
+
+https://github.com/EpiForeSITE/epiworldPythonStreamlit/issues/26
+"""
+
 from __future__ import annotations
 
 import ast
+import os
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -89,7 +96,7 @@ def _index_to_col(idx: int) -> str:
     return result
 
 
-def _scenario_columns_before_F(ws: Worksheet) -> List[str]:
+def _scenario_columns_before_F(ws: Worksheet) -> list[str]:
     f_idx = _col_to_index("F")
     return [_index_to_col(i) for i in range(_col_to_index("B"), f_idx)]
 
@@ -204,7 +211,7 @@ class ExcelValue:
 @dataclass
 class FormulaEngine:
     ws: Worksheet
-    cache: Dict[str, Any]
+    cache: dict[str, Any]
 
     def __init__(self, ws: Worksheet):
         self.ws = ws
@@ -233,9 +240,10 @@ class FormulaEngine:
                 print(f"ERROR evaluating formula in {ref}: {v}")
                 print(f"ERROR message: {e}")
                 val = 0.0
-        elif hasattr(v, "text") and isinstance(v.text, str):
+
+        elif hasattr(v, "text") and isinstance(v.text, str):  # type: ignore
             # ArrayFormula support
-            formula_text = v.text
+            formula_text = v.text  # type: ignore
             if formula_text and formula_text.startswith("="):
                 try:
                     out = self.eval_formula(formula_text)
@@ -412,7 +420,7 @@ class FormulaEngine:
             if len(unwrapped) == 1 and isinstance(unwrapped[0], list):
                 return float(sum([_to_float(v) for v in unwrapped[0]]))
 
-            lists: List[List[float]] = []
+            lists: list[list[float]] = []
             for a in unwrapped:
                 if isinstance(a, list):
                     lists.append([_to_float(v) for v in a])
@@ -421,7 +429,7 @@ class FormulaEngine:
 
             max_len = max(len(L) for L in lists)
 
-            norm: List[List[float]] = []
+            norm: list[list[float]] = []
             for L in lists:
                 if len(L) == 1 and max_len > 1:
                     norm.append(L * max_len)
@@ -465,9 +473,9 @@ class FormulaEngine:
         return float(_to_float(out))
 
 
-def excel_rows_to_nested_dict(rows: List[Tuple[int, str, Any]]) -> dict:
-    root: Dict[str, Any] = {}
-    stack: List[Tuple[int, Dict[str, Any]]] = [(0, root)]
+def excel_rows_to_nested_dict(rows: list[tuple[int, str, Any]]) -> dict:
+    root: dict[str, Any] = {}
+    stack: list[tuple[int, dict[str, Any]]] = [(0, root)]
 
     for level, name, value in rows:
         while len(stack) > 1 and stack[-1][0] >= level + 1:
@@ -483,13 +491,13 @@ def excel_rows_to_nested_dict(rows: List[Tuple[int, str, Any]]) -> dict:
 
 def apply_params_to_workbook(
     ws: Worksheet,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     name_col: str = "F",
     value_col: str = "G",
     start_row: int = 3,
     overwrite_formulas: bool = True,
 ):
-    lookup: Dict[str, Any] = {}
+    lookup: dict[str, Any] = {}
     for k, v in params.items():
         norm = str(k).replace("\t", "").strip()
         lookup[norm] = v
@@ -520,18 +528,19 @@ def apply_params_to_workbook(
 
 def load_excel_params_defaults_with_computed(
     excel_file,
-    sheet_name: Optional[str] = None,
+    sheet_name: str | None = None,
     name_col: str = "F",
     value_col: str = "G",
     start_row: int = 3,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
+    assert ws
 
     engine = FormulaEngine(ws)
 
-    editable_rows: List[Tuple[int, str, Any]] = []
-    computed_defaults: Dict[str, Any] = {}
+    editable_rows: list[tuple[int, str, Any]] = []
+    computed_defaults: dict[str, Any] = {}
 
     for r in range(start_row, ws.max_row + 1):
         name_cell = ws[f"{name_col}{r}"]
@@ -564,7 +573,7 @@ def load_excel_params_defaults_with_computed(
     return editable_defaults, computed_defaults
 
 
-def _find_outcome_header_row(ws: Worksheet) -> Optional[int]:
+def _find_outcome_header_row(ws: Worksheet) -> int | None:
     """
     Looks for the start of the result table by finding the first
     non-empty cell in Column A, starting from Row 2.
@@ -577,9 +586,9 @@ def _find_outcome_header_row(ws: Worksheet) -> Optional[int]:
 
 
 def _iter_outcome_rows(
-    ws: Worksheet, header_row: int, scenario_cols: List[str]
-) -> List[int]:
-    rows: List[int] = []
+    ws: Worksheet, header_row: int, scenario_cols: list[str]
+) -> list[int]:
+    rows: list[int] = []
     blank_streak = 0
     r = header_row + 1
 
@@ -610,9 +619,9 @@ def _iter_outcome_rows(
 
 
 def _detect_active_scenario_columns(
-    ws: Worksheet, header_row: int, scenario_cols: List[str], rows: List[int]
-) -> List[str]:
-    active: List[str] = []
+    ws: Worksheet, header_row: int, scenario_cols: list[str], rows: list[int]
+) -> list[str]:
+    active: list[str] = []
     for col in scenario_cols:
         header = ws[f"{col}{header_row}"].value
         has_header = header is not None and str(header).strip() != ""
@@ -627,15 +636,14 @@ def _detect_active_scenario_columns(
     return active
 
 
-def get_scenario_headers(
-    excel_file, sheet_name: Optional[str] = None
-) -> Dict[str, str]:
+def get_scenario_headers(excel_file, sheet_name: str | None = None) -> dict[str, str]:
     """
     Reads the header row (found by _find_outcome_header_row) and extracts
     current values for columns B, C, D, E.
     """
     wb = load_workbook(excel_file, data_only=True)
     ws = wb[sheet_name] if sheet_name else wb.active
+    assert ws
 
     header_row = _find_outcome_header_row(ws)
 
@@ -657,8 +665,8 @@ def build_sections_from_excel_outcomes(
     ws: Worksheet,
     engine: FormulaEngine,
     header_row: int,
-    label_overrides: Dict[str, str] = None,
-) -> List[dict]:
+    label_overrides: dict[str, str] | None = None,
+) -> list[dict]:
     scenario_cols_all = _scenario_columns_before_F(ws)
     outcome_rows = _iter_outcome_rows(ws, header_row, scenario_cols_all)
     scenario_cols = _detect_active_scenario_columns(
@@ -681,9 +689,9 @@ def build_sections_from_excel_outcomes(
                 str(val).strip() if val is not None and str(val).strip() != "" else col
             )
 
-    sections: List[dict] = []
-    current_title: Optional[str] = None
-    current_records: List[dict] = []
+    sections: list[dict] = []
+    current_title: str | None = None
+    current_records: list[dict] = []
 
     for r in outcome_rows:
         a_val = ws[f"A{r}"].value
@@ -750,14 +758,14 @@ def _cell_display(ws: Worksheet, engine: FormulaEngine, cell_ref: str) -> Any:
 
 def build_sections_from_generic_tables(
     ws: Worksheet, engine: FormulaEngine
-) -> List[dict]:
+) -> list[dict]:
     max_scan_rows = min(ws.max_row, 250)
     max_scan_cols = _col_to_index("E")
 
     def cell_is_blank(v: Any) -> bool:
         return v is None or str(v).strip() == ""
 
-    tables: List[Tuple[int, int, int, int]] = []
+    tables: list[tuple[int, int, int, int]] = []
 
     for top in range(1, max_scan_rows + 1):
         for left_idx in range(1, max_scan_cols - 1):
@@ -865,12 +873,13 @@ def build_sections_from_generic_tables(
 def run_excel_driven_model(
     excel_file,
     filename: str,
-    params: Dict[str, Any],
-    sheet_name: Optional[str] = None,
-    label_overrides: Dict[str, str] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    sheet_name: str | None = None,
+    label_overrides: dict[str, str] | None = None,
+) -> dict[str, Any]:
     wb = load_workbook(excel_file, data_only=False)
     ws = wb[sheet_name] if sheet_name else wb.active
+    assert ws
 
     apply_params_to_workbook(ws, params, start_row=3, overwrite_formulas=True)
 
