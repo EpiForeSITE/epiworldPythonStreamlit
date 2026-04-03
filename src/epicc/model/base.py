@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from pydantic import BaseModel
+
 
 class BaseSimulationModel(ABC):
     """Abstract contract for Python-defined simulation models."""
@@ -29,7 +31,7 @@ class BaseSimulationModel(ABC):
     @abstractmethod
     def run(
         self,
-        params: dict[str, Any],
+        params: BaseModel,
         label_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run the model and return result payload for rendering."""
@@ -37,6 +39,10 @@ class BaseSimulationModel(ABC):
     @abstractmethod
     def default_params(self) -> dict[str, Any]:
         """Return the model's default parameters as a raw (unflattened) dict."""
+
+    @abstractmethod
+    def parameter_model(self) -> type[BaseModel]:
+        """Return a Pydantic model used to validate uploaded parameter files."""
 
     @abstractmethod
     def build_sections(self, results: dict[str, Any]) -> list[dict[str, Any]]:
