@@ -64,6 +64,21 @@ _MODEL_SELECT_KEY = "model_selector"
 _URL_APPLIED_KEY = "_url_params_applied"
 _URL_WARNINGS_KEY = "_url_params_warnings"
 _URL_UNRESOLVED_WARNED_KEY = "_url_params_unresolved_warned"
+_url_scenario_ids: list[str] | None = None
+
+# Whether this session already carries a model choice, read before anything
+# below can plant one. A session that has one is not a cold start: either the
+# user picked a model here, or Streamlit rebuilt the session after a websocket
+# reconnect and the browser replayed its widget values into it. Only the plain
+# session-state keys are lost in that rebuild -- _url_params_applied among them
+# -- so without this the link would be applied a second time and quietly undo
+# whatever the user had just done (see the resolved branch below).
+_session_has_selection = st.session_state.get(_MODEL_SELECT_KEY) is not None
+
+# ...unless this session has already read the link and reported that it could
+# not open it. Such a link is still waiting for its model, and the selection
+# the user just made may well be it, so it is allowed to land on top.
+_link_still_pending = bool(st.session_state.get(_URL_UNRESOLVED_WARNED_KEY))
 
 # A just-loaded model is selected on the rerun after the upload dialog closes.
 # Consume that selection before URL resolution so it can disambiguate a pending
@@ -100,23 +115,40 @@ if not st.session_state.get(_URL_APPLIED_KEY):
             st.session_state[_URL_APPLIED_KEY] = True
             _url_label = _url_state.model_label
             assert _url_label is not None  # Type narrowing for mypy
-            st.session_state[_MODEL_SELECT_KEY] = _url_label
-            # Activate the model and populate its keyed widgets before they render.
-            _url_params = sync_active_model(_url_label)
-            set_active_param_identity(DEFAULT_PARAM_IDENTITY)
-            _url_active_model = model_registry[_url_label]
-            reset_parameters_to_defaults(
-                _url_state.params,
-                _url_params,
-                _url_label,
-                param_specs=_url_active_model.parameter_specs,
-            )
-            if _url_state.scenarios:
-                reset_scenario_state(
+
+            # Widget values are newer than the link in a rebuilt session, but
+            # scenario ids are plain bookkeeping that only the link can restore.
+            # Do not carry ids across a model switch while the address bar is
+            # still one run behind the selector.
+            if (
+                _url_state.scenarios is not None
+                and _url_label == st.session_state.get(_MODEL_SELECT_KEY)
+            ):
+                _url_scenario_ids = [scenario.id for scenario in _url_state.scenarios]
+
+            # A link is opening state, not overwriting it. Widget state that is
+            # already here is what the user is looking at, and it is newer than
+            # the link, so leave it alone and let the address bar catch up with
+            # it further down instead.
+            if _link_still_pending or not _session_has_selection:
+                st.session_state[_MODEL_SELECT_KEY] = _url_label
+                # Activate the model and populate its keyed widgets before they
+                # render.
+                _url_params = sync_active_model(_url_label)
+                set_active_param_identity(DEFAULT_PARAM_IDENTITY)
+                _url_active_model = model_registry[_url_label]
+                reset_parameters_to_defaults(
+                    _url_state.params,
+                    _url_params,
                     _url_label,
-                    _url_state.scenarios,
-                    _url_active_model.scenario_parameter_specs or {},
+                    param_specs=_url_active_model.parameter_specs,
                 )
+                if _url_state.scenarios:
+                    reset_scenario_state(
+                        _url_label,
+                        _url_state.scenarios,
+                        _url_active_model.scenario_parameter_specs or {},
+                    )
 
 
 def _activate_preview(model_label: str) -> bool:
@@ -313,6 +345,7 @@ with param_col:
                 selected_label,
                 params,
                 container=parameter_panel,
+                recovered_scenario_ids=_url_scenario_ids,
             )
         )
 

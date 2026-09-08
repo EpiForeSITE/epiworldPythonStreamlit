@@ -364,6 +364,44 @@ def _init_scenario_state(
             )
 
 
+def _replayed_scenario_count(model_key: str) -> int:
+    """How many scenario rows already have widget state, counting from the top."""
+    count = 0
+    while _scenario_label_key(model_key, count) in st.session_state:
+        count += 1
+    return count
+
+
+def _adopt_scenario_state(
+    model_key: str,
+    defaults: list[Scenario],
+    specs: dict[str, Parameter],
+    recovered_ids: list[str] | None = None,
+) -> None:
+    """Recover the editor's bookkeeping, or seed it from *defaults*.
+
+    The row count and the id list are plain session state, so a session that
+    Streamlit rebuilt after a websocket reconnect loses them while the browser
+    replays the label and variable widgets they describe. Seeding from the
+    defaults there would overwrite the user's scenarios with the model's own,
+    so the rows that came back are counted instead. Their ids come from the
+    still-present URL when it names a custom selection or order, with model
+    defaults as the fallback. This preserves the identity of each replayed
+    label and value without letting the older link overwrite either one.
+    """
+    replayed = _replayed_scenario_count(model_key)
+    if not replayed:
+        _init_scenario_state(model_key, defaults, specs)
+        return
+    st.session_state[_scenario_count_key(model_key)] = replayed
+    default_ids = [scenario.id for scenario in defaults]
+    known_ids = recovered_ids if recovered_ids is not None else default_ids
+    adopted_ids = list(known_ids[:replayed])
+    for i in range(len(adopted_ids), replayed):
+        adopted_ids.append(default_ids[i] if i < len(default_ids) else f"custom_{i}")
+    st.session_state[_scenario_ids_key(model_key)] = adopted_ids
+
+
 def reset_scenario_state(
     model_key: str,
     defaults: list[Scenario],
@@ -406,6 +444,7 @@ def _render_scenario_editor(
     model: BaseSimulationModel,
     model_key: str,
     container: Any,
+    recovered_ids: list[str] | None = None,
 ) -> list[Scenario] | None:
     """Render the scenario editor and return the current scenario list."""
     default_scenarios = model.default_scenarios
@@ -417,9 +456,11 @@ def _render_scenario_editor(
     cnt_key = _scenario_count_key(model_key)
     ids_key = _scenario_ids_key(model_key)
 
-    # First-time initialization
+    # First-time initialization, or recovery of a rebuilt session's bookkeeping
     if cnt_key not in st.session_state:
-        _init_scenario_state(model_key, default_scenarios, specs)
+        _adopt_scenario_state(
+            model_key, default_scenarios, specs, recovered_ids=recovered_ids
+        )
 
     count: int = st.session_state[cnt_key]
     ids: list[str] = st.session_state[ids_key]
@@ -698,6 +739,7 @@ def render_sidebar_parameters(
     params: dict[str, Any],
     *,
     container: Any = None,
+    recovered_scenario_ids: list[str] | None = None,
 ) -> tuple[dict[str, Any], list[Scenario] | None, dict[str, Any], bool, bool]:
     """Render the full parameter panel for model inside container.
 
@@ -731,7 +773,14 @@ def render_sidebar_parameters(
         param_identity = DEFAULT_PARAM_IDENTITY
 
     should_refresh = False
-    if get_active_param_identity() != param_identity:
+    previous_identity = get_active_param_identity()
+    if previous_identity is None:
+        # Nothing was recorded, so nothing changed -- there is no preset to
+        # switch away from. Recording it without a refresh keeps a session
+        # Streamlit rebuilt after a websocket reconnect from resetting the
+        # widget values the browser just replayed into it.
+        set_active_param_identity(param_identity)
+    elif previous_identity != param_identity:
         set_active_param_identity(param_identity)
         params = reset_params()
         clear_results()
@@ -775,7 +824,9 @@ def render_sidebar_parameters(
     ct.caption("Parameters")
 
     # Scenario editor (replaces the old label-only "Output Scenario Headers")
-    scenario_overrides = _render_scenario_editor(model, model_key, ct)
+    scenario_overrides = _render_scenario_editor(
+        model, model_key, ct, recovered_ids=recovered_scenario_ids
+    )
 
     render_parameters_with_indent(
         model_defaults,
