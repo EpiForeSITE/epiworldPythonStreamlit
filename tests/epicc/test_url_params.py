@@ -1004,6 +1004,7 @@ def test_a_rebuilt_session_keeps_the_model_the_user_switched_to() -> None:
 
     assert not app.exception
     assert app.session_state["model_selector"] == TB_LABEL
+    assert app.session_state[f"{TB_LABEL}__scen_ids"] == ["14_day", "5_day"]
     # The address bar catches up with the session, not the other way round.
     assert app.query_params["model"][0] == "tb_isolation"
 
@@ -1052,6 +1053,58 @@ def test_a_rebuilt_session_keeps_the_scenarios_the_user_edited() -> None:
     assert app.session_state[f"{MEASLES_LABEL}__scen_count"] == 3
     assert app.query_params["scen.22_cases.label"][0] == "Tiny outbreak"
     assert app.query_params["scen.22_cases.n_cases"][0] == "40"
+
+
+def test_a_rebuilt_session_keeps_scenario_ids_from_the_url() -> None:
+    # Scenario ids are not widgets, so recover a shared link's selection and
+    # order from the URL while keeping the newer label/value widgets.
+    app = AppTest.from_file("app.py")
+    app.query_params.update(
+        {"model": "measles", "scenarios": "803_cases,22_cases"}
+    )
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.session_state[f"{MEASLES_LABEL}__scen_ids"] == [
+        "803_cases",
+        "22_cases",
+    ]
+
+    def first_label() -> Any:
+        return next(
+            widget
+            for widget in app.text_input
+            if widget.key == f"{MEASLES_LABEL}:scen_0:label"
+        )
+
+    def first_cases() -> Any:
+        return next(
+            widget
+            for widget in app.number_input
+            if widget.key == f"{MEASLES_LABEL}:scen_0:n_cases"
+        )
+
+    first_label().set_value("Large outbreak")
+    first_cases().set_value(900)
+    app.run(timeout=30)
+    assert app.query_params["scen.803_cases.label"][0] == "Large outbreak"
+
+    # These latest widget values are one run ahead of the URL at reconnect.
+    first_label().set_value("Largest outbreak")
+    first_cases().set_value(901)
+    _forget_reconnect_casualties(app)
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{MEASLES_LABEL}__scen_ids"] == [
+        "803_cases",
+        "22_cases",
+    ]
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:label"] == "Largest outbreak"
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:n_cases"] == 901
+    assert app.query_params["scenarios"][0] == "803_cases,22_cases"
+    assert app.query_params["scen.803_cases.label"][0] == "Largest outbreak"
+    assert app.query_params["scen.803_cases.n_cases"][0] == "901"
 
 
 def test_a_rebuilt_session_keeps_the_values_the_user_edited() -> None:

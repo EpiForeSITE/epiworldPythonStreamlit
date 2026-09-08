@@ -376,6 +376,7 @@ def _adopt_scenario_state(
     model_key: str,
     defaults: list[Scenario],
     specs: dict[str, Parameter],
+    recovered_ids: list[str] | None = None,
 ) -> None:
     """Recover the editor's bookkeeping, or seed it from *defaults*.
 
@@ -383,22 +384,22 @@ def _adopt_scenario_state(
     Streamlit rebuilt after a websocket reconnect loses them while the browser
     replays the label and variable widgets they describe. Seeding from the
     defaults there would overwrite the user's scenarios with the model's own,
-    so the rows that came back are counted instead, and their ids taken from
-    the defaults by position -- the same fallback
-    :func:`_collect_scenario_overrides` already applies to a row the user
-    added. Ids that came from a link's ``scenarios`` list cannot be recovered
-    this way and revert to the defaults', but the labels and values the user
-    is looking at survive, which they did not before.
+    so the rows that came back are counted instead. Their ids come from the
+    still-present URL when it names a custom selection or order, with model
+    defaults as the fallback. This preserves the identity of each replayed
+    label and value without letting the older link overwrite either one.
     """
     replayed = _replayed_scenario_count(model_key)
     if not replayed:
         _init_scenario_state(model_key, defaults, specs)
         return
     st.session_state[_scenario_count_key(model_key)] = replayed
-    st.session_state[_scenario_ids_key(model_key)] = [
-        defaults[i].id if i < len(defaults) else f"custom_{i}"
-        for i in range(replayed)
-    ]
+    default_ids = [scenario.id for scenario in defaults]
+    known_ids = recovered_ids if recovered_ids is not None else default_ids
+    adopted_ids = list(known_ids[:replayed])
+    for i in range(len(adopted_ids), replayed):
+        adopted_ids.append(default_ids[i] if i < len(default_ids) else f"custom_{i}")
+    st.session_state[_scenario_ids_key(model_key)] = adopted_ids
 
 
 def reset_scenario_state(
@@ -443,6 +444,7 @@ def _render_scenario_editor(
     model: BaseSimulationModel,
     model_key: str,
     container: Any,
+    recovered_ids: list[str] | None = None,
 ) -> list[Scenario] | None:
     """Render the scenario editor and return the current scenario list."""
     default_scenarios = model.default_scenarios
@@ -456,7 +458,9 @@ def _render_scenario_editor(
 
     # First-time initialization, or recovery of a rebuilt session's bookkeeping
     if cnt_key not in st.session_state:
-        _adopt_scenario_state(model_key, default_scenarios, specs)
+        _adopt_scenario_state(
+            model_key, default_scenarios, specs, recovered_ids=recovered_ids
+        )
 
     count: int = st.session_state[cnt_key]
     ids: list[str] = st.session_state[ids_key]
@@ -735,6 +739,7 @@ def render_sidebar_parameters(
     params: dict[str, Any],
     *,
     container: Any = None,
+    recovered_scenario_ids: list[str] | None = None,
 ) -> tuple[dict[str, Any], list[Scenario] | None, dict[str, Any], bool, bool]:
     """Render the full parameter panel for model inside container.
 
@@ -819,7 +824,9 @@ def render_sidebar_parameters(
     ct.caption("Parameters")
 
     # Scenario editor (replaces the old label-only "Output Scenario Headers")
-    scenario_overrides = _render_scenario_editor(model, model_key, ct)
+    scenario_overrides = _render_scenario_editor(
+        model, model_key, ct, recovered_ids=recovered_scenario_ids
+    )
 
     render_parameters_with_indent(
         model_defaults,

@@ -64,6 +64,7 @@ _MODEL_SELECT_KEY = "model_selector"
 _URL_APPLIED_KEY = "_url_params_applied"
 _URL_WARNINGS_KEY = "_url_params_warnings"
 _URL_UNRESOLVED_WARNED_KEY = "_url_params_unresolved_warned"
+_url_scenario_ids: list[str] | None = None
 
 # Whether this session already carries a model choice, read before anything
 # below can plant one. A session that has one is not a cold start: either the
@@ -112,13 +113,24 @@ if not st.session_state.get(_URL_APPLIED_KEY):
                 st.session_state[_URL_UNRESOLVED_WARNED_KEY] = True
         if _url_state.resolved:
             st.session_state[_URL_APPLIED_KEY] = True
+            _url_label = _url_state.model_label
+            assert _url_label is not None  # Type narrowing for mypy
+
+            # Widget values are newer than the link in a rebuilt session, but
+            # scenario ids are plain bookkeeping that only the link can restore.
+            # Do not carry ids across a model switch while the address bar is
+            # still one run behind the selector.
+            if (
+                _url_state.scenarios is not None
+                and _url_label == st.session_state.get(_MODEL_SELECT_KEY)
+            ):
+                _url_scenario_ids = [scenario.id for scenario in _url_state.scenarios]
+
             # A link is opening state, not overwriting it. Widget state that is
             # already here is what the user is looking at, and it is newer than
             # the link, so leave it alone and let the address bar catch up with
             # it further down instead.
             if _link_still_pending or not _session_has_selection:
-                _url_label = _url_state.model_label
-                assert _url_label is not None  # Type narrowing for mypy
                 st.session_state[_MODEL_SELECT_KEY] = _url_label
                 # Activate the model and populate its keyed widgets before they
                 # render.
@@ -333,6 +345,7 @@ with param_col:
                 selected_label,
                 params,
                 container=parameter_panel,
+                recovered_scenario_ids=_url_scenario_ids,
             )
         )
 
