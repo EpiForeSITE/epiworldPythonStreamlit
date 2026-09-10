@@ -35,6 +35,7 @@ explicit_package_bases = true
 [tool.stlite]
 title = "Epidemiological Cost Calculator (EPICC)"
 mount_dirs = ["src"]
+exclude_requirements = ["kaleido"]
 text_suffixes = [".py", ".yaml", ".yml", ".css", ".js", ".html"]
 binary_suffixes = [".png"]
 css_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css"
