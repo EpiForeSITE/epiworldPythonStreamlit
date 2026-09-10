@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from typing import Any
 
 from epicc.ui import export
@@ -59,3 +60,57 @@ def test_cancel_print_request_clears_a_pending_request(monkeypatch) -> None:
     export.cancel_print_request()
 
     assert state[_PRINT_REQUESTED_KEY] is False
+
+
+class _Model:
+    def human_name(self) -> str:
+        return "Example Model"
+
+
+def test_docx_button_is_ready_to_download_on_first_render(monkeypatch) -> None:
+    """DOCX bytes must exist before the download button receives its click."""
+
+    captured: dict[str, Any] = {}
+    state: dict[str, Any] = {}
+    output = {"value": 1}
+
+    monkeypatch.setattr(export.st, "session_state", state)
+    monkeypatch.setattr(export, "has_results", lambda: True)
+    monkeypatch.setattr(export.st, "spinner", lambda _: nullcontext())
+    monkeypatch.setattr(
+        export,
+        "_build_docx_export_bytes",
+        lambda model, run_output: b"DOCX bytes",
+    )
+    monkeypatch.setattr(
+        export.st,
+        "download_button",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    export.render_docx_export_button(_Model(), output)
+
+    assert captured["label"] == "Save report as DOCX"
+    assert captured["data"] == b"DOCX bytes"
+    assert "docx_data_example_model" in state
+
+
+def test_docx_button_reuses_bytes_for_unchanged_results(monkeypatch) -> None:
+    state: dict[str, Any] = {}
+    output = {"value": 1}
+    build_calls: list[None] = []
+
+    monkeypatch.setattr(export.st, "session_state", state)
+    monkeypatch.setattr(export, "has_results", lambda: True)
+    monkeypatch.setattr(export.st, "spinner", lambda _: nullcontext())
+    monkeypatch.setattr(
+        export,
+        "_build_docx_export_bytes",
+        lambda model, run_output: build_calls.append(None) or b"DOCX bytes",
+    )
+    monkeypatch.setattr(export.st, "download_button", lambda **_: None)
+
+    export.render_docx_export_button(_Model(), output)
+    export.render_docx_export_button(_Model(), output)
+
+    assert build_calls == [None]

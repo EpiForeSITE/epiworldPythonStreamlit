@@ -179,7 +179,7 @@ def render_docx_export_button(
     run_output: dict[str, Any] | None,
     container: Any = None,
 ) -> None:
-    """Render a direct Save report as DOCX button."""
+    """Render a direct, single-click Save report as DOCX button."""
     rc = container if container is not None else st
     model_key = model.human_name().lower().replace(" ", "_")
     data_state_key = f"docx_data_{model_key}"
@@ -195,18 +195,17 @@ def render_docx_export_button(
         rc.button("Save report as DOCX (please wait)", disabled=True, use_container_width=True)
         return
 
-    if data_state_key not in st.session_state:
-        if rc.button("Save report as DOCX", type="primary", use_container_width=True):
-            try:
-                with st.spinner("Preparing DOCX report..."):
-                    st.session_state[data_state_key] = _build_docx_export_bytes(model, run_output)
-                st.success("DOCX report is ready. Click again to download.")
-                st.rerun()
-            except Exception as exc:
-                rc.error(f"Could not generate DOCX report: {exc}")
-        return
-
     try:
+        # ``download_button`` needs its data before the user clicks it. Building
+        # the document from a regular button's return value therefore replaces
+        # that first click with a preparation rerun and leaves a second click to
+        # download. Cache the bytes when the results change so this is a real
+        # download button on its first render, while avoiding work on later
+        # reruns for the same result set.
+        if data_state_key not in st.session_state:
+            with st.spinner("Preparing DOCX report..."):
+                st.session_state[data_state_key] = _build_docx_export_bytes(model, run_output)
+
         rc.download_button(
             label="Save report as DOCX",
             data=st.session_state[data_state_key],
