@@ -43,8 +43,16 @@ def load_config(pyproject_path: Path) -> dict:
         pyproject = tomllib.load(f)
 
     deps = pyproject.get("project", {}).get("dependencies", [])
-    packages = [strip_dependency_name(dep) for dep in deps]
     stlite_config = pyproject.get("tool", {}).get("stlite", {})
+    excluded_packages = {
+        strip_dependency_name(dep)
+        for dep in stlite_config.get("exclude_requirements", [])
+    }
+    packages = [
+        strip_dependency_name(dep)
+        for dep in deps
+        if strip_dependency_name(dep) not in excluded_packages
+    ]
     required_fields = ["mount_dirs", "text_suffixes", "title", "css_url", "js_url"]
     missing = [field for field in required_fields if field not in stlite_config]
 
