@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "EPICC: Epidemiological Cost Calculator"
+version: "1.0.3"
+authors:
+  - family-names: "Banks"
+    given-names: "Olivia"
+  - family-names: "Wang"
+    given-names: "Edward"
+  - family-names: "Nelson"
+    given-names: "Richard"
+  - family-names: "Vega Yon"
+    given-names: "George G."
+    orcid: "https://orcid.org/0000-0002-3171-0844"
+abstract: "A browser-based utility for simulating the economic outcomes of epidemiological models and public-health interventions."
+repository-code: "https://github.com/epiforesite/epicc"
+url: "https://epiforesite.github.io/epicc/"
+keywords:
+  - "epidemiology"
+  - "health economics"
+  - "policy"
